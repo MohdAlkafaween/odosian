@@ -225,7 +225,7 @@ export default function UsersPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">User Management</h1>
+          <h1 className="text-[28px] font-extrabold text-text">Shield Defenders</h1>
           <p className="text-sm text-text-secondary mt-1">Manage platform users and their roles</p>
         </div>
       </div>

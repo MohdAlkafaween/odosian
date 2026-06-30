@@ -180,8 +180,8 @@ export default function RulesListPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">Detection Rules</h1>
-          <p className="text-sm text-text-secondary mt-1">
+          <h1 className="text-[28px] font-extrabold text-text">Defense Rules Arsenal</h1>
+          <p className="text-sm text-text-muted mt-1">
             Manage your Elastic SIEM detection rules
           </p>
         </div>
@@ -208,7 +208,7 @@ export default function RulesListPage() {
             )}
           </div>
           <Button onClick={() => router.push("/dashboard/rules/new")}>
-            + Create Rule
+            <span className="text-base">+</span> Forge New Rule
           </Button>
         </div>
       </div>

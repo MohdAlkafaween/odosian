@@ -6,12 +6,12 @@ type Variant = "primary" | "success" | "accent" | "danger" | "ghost" | "outline"
 type Size = "sm" | "md" | "lg";
 
 const variantClasses: Record<Variant, string> = {
-  primary: "bg-primary text-bg hover:bg-primary-hover",
+  primary: "btn-primary-gradient text-bg font-bold hover:shadow-[0_4px_16px_rgba(76,189,250,0.3)]",
   success: "bg-success text-bg hover:bg-success-hover",
   accent: "bg-accent text-bg hover:bg-accent-hover",
   danger: "bg-danger text-white hover:bg-danger-hover",
   ghost: "bg-transparent text-text-secondary hover:bg-surface-light",
-  outline: "bg-transparent text-text border border-border hover:bg-surface-light",
+  outline: "bg-transparent text-text-secondary border border-border hover:border-primary hover:text-primary",
 };
 
 const sizeClasses: Record<Size, string> = {

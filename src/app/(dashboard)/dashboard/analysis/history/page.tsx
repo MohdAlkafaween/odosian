@@ -132,7 +132,7 @@ export default function AnalysisHistoryPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">Analysis History</h1>
+          <h1 className="text-[28px] font-extrabold text-text">Shield Analysis History</h1>
           <p className="text-sm text-text-secondary mt-1">View past AI analysis results</p>
         </div>
         <Link href="/dashboard/analysis">

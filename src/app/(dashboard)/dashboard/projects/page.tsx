@@ -87,8 +87,8 @@ export default function ProjectsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">Projects</h1>
-          <p className="text-sm text-text-secondary mt-1">Organize detection rules into projects</p>
+          <h1 className="text-[28px] font-extrabold text-text">Shield Projects</h1>
+          <p className="text-sm text-text-muted mt-1">Organize detection rules into projects</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
           {showForm ? "Cancel" : "+ New Project"}

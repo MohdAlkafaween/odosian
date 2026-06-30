@@ -60,7 +60,7 @@ export default function AnalysisDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-2xl font-bold text-text">{TYPE_LABELS[analysis.analysisType] || analysis.analysisType}</h1>
+            <h1 className="text-[28px] font-extrabold text-text">{TYPE_LABELS[analysis.analysisType] || analysis.analysisType}</h1>
             <Badge preset="info">{analysis.analysisType}</Badge>
           </div>
           <p className="text-sm text-text-muted">

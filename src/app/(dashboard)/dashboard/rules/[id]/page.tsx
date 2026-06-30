@@ -131,7 +131,7 @@ export default function RuleDetailPage() {
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">{rule.title}</h1>
+          <h1 className="text-[28px] font-extrabold text-text">{rule.title}</h1>
           {rule.description && (
             <p className="text-sm text-text-secondary mt-1 max-w-2xl">{rule.description}</p>
           )}

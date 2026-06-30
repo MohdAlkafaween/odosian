@@ -2,11 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { useAuthStore } from "@/stores/auth";
+import { useToastStore } from "@/stores/toast";
 
 export default function DashboardLayout({
   children,
@@ -16,6 +19,20 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { clearAuth } = useAuthStore();
+  const { addToast } = useToastStore();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      clearAuth();
+      addToast("info", "Signed out successfully");
+      router.push("/login");
+    } catch {
+      addToast("error", "Failed to sign out");
+    }
+  };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -40,7 +57,7 @@ export default function DashboardLayout({
 
   return (
     <AuthGuard>
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen bg-bg">
         <div className="hidden md:block">
           <Sidebar />
         </div>
@@ -54,20 +71,57 @@ export default function DashboardLayout({
               <path d="M3 12h18M3 6h18M3 18h18" />
             </svg>
           </button>
-          <Link href="/dashboard" className="text-lg font-bold text-text">
-            <span className="text-primary">Odo</span>sian
-          </Link>
+          <div className="flex items-center gap-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="#4CBDFA">
+              <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+            </svg>
+            <span className="text-sm font-extrabold tracking-[3px] text-primary">ODOSIAN</span>
+          </div>
           <div className="w-8" />
         </div>
 
         <Sidebar mobile open={mobileOpen} onClose={() => setMobileOpen(false)} />
 
-        <main className="flex-1 overflow-auto">
-          <div className="p-6 pt-20 md:pt-6">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Topbar */}
+          <header className="hidden md:flex h-14 border-b border-border items-center justify-between px-6 bg-surface shrink-0">
             <Breadcrumb />
-            {children}
-          </div>
-        </main>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setPaletteOpen(true)}
+                className="px-3.5 py-2 bg-bg border border-border rounded-lg text-sm text-text-muted flex items-center gap-2 hover:border-primary transition-all"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                </svg>
+                <span>⌘K</span>
+              </button>
+              <button className="relative p-2 rounded-lg text-text-muted hover:bg-surface-light transition-all">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                </svg>
+                <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger border-2 border-surface" />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-lg text-text-muted hover:bg-surface-light hover:text-danger transition-all"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z" />
+                </svg>
+              </button>
+            </div>
+          </header>
+
+          <main className="flex-1 overflow-auto bg-bg hex-bg-subtle">
+            <div className="p-6 pt-20 md:pt-6 max-w-[1400px] mx-auto animate-fade-in-up">
+              <div className="md:hidden mb-4">
+                <Breadcrumb />
+              </div>
+              {children}
+            </div>
+          </main>
+        </div>
       </div>
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

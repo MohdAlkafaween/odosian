@@ -189,7 +189,7 @@ export default function ProjectDetailPage() {
             </div>
           ) : (
             <>
-              <h1 className="text-2xl font-bold text-text">{project.name}</h1>
+              <h1 className="text-[28px] font-extrabold text-text">{project.name}</h1>
               {project.description && <p className="text-sm text-text-secondary mt-1">{project.description}</p>}
               <p className="text-xs text-text-muted mt-1">
                 Owned by {project.owner.name} · Created {new Date(project.createdAt).toLocaleDateString()}

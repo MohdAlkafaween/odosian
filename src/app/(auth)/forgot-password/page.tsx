@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardBody } from "@/components/ui/card";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
@@ -29,53 +28,47 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="text-xl font-semibold text-text">Reset Password</h2>
-        <p className="text-sm text-text-secondary">
-          Enter your email to receive a password reset link
-        </p>
-      </CardHeader>
-      <CardBody>
-        {sent ? (
-          <div className="text-center py-4">
-            <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-success">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-            </div>
-            <p className="text-sm text-text-secondary mb-4">
-              If an account with that email exists, we&apos;ve sent a password reset link.
-              Check your inbox.
-            </p>
-            <Link href="/login" className="text-primary hover:underline text-sm">
-              Back to Sign In
-            </Link>
+    <div className="bg-surface border border-border rounded-xl p-8 shadow-[0_0_40px_rgba(76,189,250,0.05)]">
+      <h2 className="text-xl font-bold text-text mb-1">Reset Shield Access</h2>
+      <p className="text-sm text-text-muted mb-6">We&apos;ll send a reset link to your email</p>
+
+      {sent ? (
+        <div className="text-center py-4">
+          <div className="w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mx-auto mb-4">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-success">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              label="Email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="analyst@example.com"
-              required
-            />
-            <Button type="submit" className="w-full" loading={loading}>
-              Send Reset Link
-            </Button>
-          </form>
-        )}
-        {!sent && (
-          <p className="text-sm text-text-secondary text-center mt-4">
-            Remember your password?{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              Sign in
-            </Link>
+          <p className="text-sm text-text-secondary mb-4">
+            If an account with that email exists, we&apos;ve sent a password reset link.
+            Check your inbox.
           </p>
-        )}
-      </CardBody>
-    </Card>
+          <Link href="/login" className="text-primary hover:underline text-sm">
+            &larr; Back to login
+          </Link>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <Input
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="defender@example.com"
+            required
+          />
+          <Button type="submit" className="w-full" loading={loading}>
+            Send Shield Reset
+          </Button>
+        </form>
+      )}
+      {!sent && (
+        <p className="text-sm text-center mt-4">
+          <Link href="/login" className="text-primary hover:underline">
+            &larr; Back to login
+          </Link>
+        </p>
+      )}
+    </div>
   );
 }

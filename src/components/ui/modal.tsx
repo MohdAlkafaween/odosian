@@ -49,13 +49,13 @@ export function Modal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="fixed inset-0 bg-black/60" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/70 animate-fade-in-up" onClick={onClose} />
       <div
-        className={`relative w-full ${sizeClasses[size]} bg-surface border border-border rounded-xl shadow-2xl`}
+        className={`relative w-full ${sizeClasses[size]} bg-surface border border-border rounded-xl shadow-2xl animate-fade-in-up`}
       >
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-            <h2 className="text-lg font-semibold text-text">{title}</h2>
+            <h2 className="text-lg font-bold text-text">{title}</h2>
             <button
               onClick={onClose}
               className="text-text-muted hover:text-text transition-colors"

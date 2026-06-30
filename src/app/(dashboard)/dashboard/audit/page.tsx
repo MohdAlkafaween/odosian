@@ -92,7 +92,7 @@ export default function AuditLogsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Audit Logs</h1>
+        <h1 className="text-[28px] font-extrabold text-text">Shield Audit Logs</h1>
         <p className="text-sm text-text-secondary mt-1">Track all system activity and changes</p>
       </div>
 

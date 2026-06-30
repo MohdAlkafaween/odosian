@@ -204,7 +204,7 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Settings</h1>
+        <h1 className="text-[28px] font-extrabold text-text">Shield Configuration</h1>
         <p className="text-sm text-text-secondary mt-1">Manage system configuration, AI providers, and prompts</p>
       </div>
 

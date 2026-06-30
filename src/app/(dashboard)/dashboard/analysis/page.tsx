@@ -57,8 +57,8 @@ function AnalysisContent() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">AI Analysis</h1>
-          <p className="text-sm text-text-secondary mt-1">
+          <h1 className="text-[28px] font-extrabold text-text">Shield Analysis Center</h1>
+          <p className="text-sm text-text-muted mt-1">
             Analyze, enhance, and generate detection rules with AI
           </p>
         </div>
@@ -144,8 +144,9 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
               ]} />
             </>
           )}
-          <Button onClick={handleAnalyze} loading={loading} className="w-full">
-            {loading ? "Analyzing..." : "Run Analysis"}
+          <Button onClick={handleAnalyze} loading={loading} className="w-full gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>
+            {loading ? "Forging analysis..." : "Engage Shield Analysis"}
           </Button>
         </CardBody>
       </Card>

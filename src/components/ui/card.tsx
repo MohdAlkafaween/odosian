@@ -5,7 +5,7 @@ interface CardProps {
 
 export function Card({ className = "", children }: CardProps) {
   return (
-    <div className={`bg-surface border border-border rounded-xl ${className}`}>
+    <div className={`bg-surface border border-border rounded-[10px] card-hover-glow ${className}`}>
       {children}
     </div>
   );

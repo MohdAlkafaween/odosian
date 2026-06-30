@@ -111,6 +111,28 @@ const navItems: NavItem[] = [
   },
 ];
 
+function ShieldLogo({ size = 28 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#4CBDFA" className="shrink-0">
+      <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+    </svg>
+  );
+}
+
+function UserInitials({ name }: { name: string }) {
+  const initials = name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+  return (
+    <div className="w-7 h-7 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-xs font-bold text-bg shrink-0">
+      {initials}
+    </div>
+  );
+}
+
 interface SidebarProps {
   mobile?: boolean;
   open?: boolean;
@@ -148,28 +170,27 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
     if (!open) return null;
     return (
       <div className="fixed inset-0 z-50">
-        <div className="fixed inset-0 bg-black/60" onClick={onClose} />
-        <aside className="fixed left-0 top-0 bottom-0 w-64 bg-surface border-r border-border flex flex-col animate-in slide-in-from-left duration-200">
-          <div className="flex items-center justify-between px-4 py-5 border-b border-border">
-            <Link href="/dashboard" className="text-xl font-bold text-text" onClick={handleNavClick}>
-              <span className="text-primary">Odo</span>sian
-            </Link>
-            <button onClick={onClose} className="text-text-muted hover:text-text p-1 transition-colors">
+        <div className="fixed inset-0 bg-black/70" onClick={onClose} />
+        <aside className="fixed left-0 top-0 bottom-0 w-64 bg-surface border-r border-border flex flex-col animate-fade-in-up">
+          <div className="flex items-center gap-3 px-4 py-5 border-b border-border min-h-16">
+            <ShieldLogo />
+            <span className="text-base font-extrabold tracking-[3px] text-primary">ODOSIAN</span>
+            <button onClick={onClose} className="ml-auto text-text-muted hover:text-text p-1 transition-colors">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <nav className="flex-1 py-4 overflow-y-auto">
+          <nav className="flex-1 py-3 px-2 overflow-y-auto flex flex-col gap-0.5">
             {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={handleNavClick}
-                className={`flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
                   isActive(item.href)
-                    ? "bg-primary/10 text-primary"
-                    : "text-text-secondary hover:text-text hover:bg-surface-light"
+                    ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
+                    : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
                 }`}
               >
                 <span className="shrink-0">{item.icon}</span>
@@ -177,25 +198,20 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
               </Link>
             ))}
           </nav>
-          <div className="border-t border-border p-4">
+          <div className="border-t border-border p-3">
             {user && (
-              <Link href="/dashboard/profile" className="block mb-3 group" onClick={handleNavClick}>
-                <p className="text-sm font-medium text-text truncate group-hover:text-primary transition-colors">
-                  {user.name}
-                </p>
-                <p className="text-xs text-text-muted truncate">{user.email}</p>
+              <Link
+                href="/dashboard/profile"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-light transition-all"
+                onClick={handleNavClick}
+              >
+                <UserInitials name={user.name} />
+                <div className="overflow-hidden">
+                  <p className="text-sm font-semibold text-text truncate">{user.name}</p>
+                  <p className="text-xs text-text-muted truncate">{user.role}</p>
+                </div>
               </Link>
             )}
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 text-sm text-text-secondary hover:text-danger transition-colors"
-              title="Sign out"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
-              </svg>
-              <span>Sign Out</span>
-            </button>
           </div>
         </aside>
       </div>
@@ -204,83 +220,65 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
 
   return (
     <aside
-      className={`flex flex-col bg-surface border-r border-border h-screen sticky top-0 transition-all duration-200 ${
+      className={`flex flex-col bg-surface border-r border-border h-screen sticky top-0 transition-all duration-300 overflow-hidden shrink-0 ${
         collapsed ? "w-16" : "w-64"
       }`}
     >
-      <div className="flex items-center justify-between px-4 py-5 border-b border-border">
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-border min-h-16">
+        <ShieldLogo />
         {!collapsed && (
-          <Link href="/dashboard" className="text-xl font-bold text-text">
-            <span className="text-primary">Odo</span>sian
-          </Link>
+          <span className="text-base font-extrabold tracking-[3px] text-primary whitespace-nowrap">ODOSIAN</span>
         )}
-        <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="text-text-muted hover:text-text p-1 transition-colors"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            {collapsed ? (
-              <path d="M9 18l6-6-6-6" />
-            ) : (
-              <path d="M15 18l-6-6 6-6" />
-            )}
-          </svg>
-        </button>
       </div>
 
-      <nav className="flex-1 py-4 overflow-y-auto">
+      <nav className="flex-1 py-3 px-2 overflow-y-auto flex flex-col gap-0.5">
         {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className={`flex items-center gap-3 mx-2 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all min-h-10 ${
               isActive(item.href)
-                ? "bg-primary/10 text-primary"
-                : "text-text-secondary hover:text-text hover:bg-surface-light"
+                ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
+                : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
             }`}
             title={collapsed ? item.label : undefined}
           >
             <span className="shrink-0">{item.icon}</span>
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
           </Link>
         ))}
       </nav>
 
-      <div className="border-t border-border p-4">
-        {!collapsed && user && (
-          <Link href="/dashboard/profile" className="block mb-3 group">
-            <p className="text-sm font-medium text-text truncate group-hover:text-primary transition-colors">
-              {user.name}
-            </p>
-            <p className="text-xs text-text-muted truncate">{user.email}</p>
-          </Link>
-        )}
+      <div className="border-t border-border p-2">
         <button
-          onClick={handleLogout}
-          className={`flex items-center gap-2 text-sm text-text-secondary hover:text-danger transition-colors ${
-            collapsed ? "justify-center w-full" : ""
-          }`}
-          title="Sign out"
+          onClick={() => setCollapsed(!collapsed)}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-text-muted hover:bg-surface-light hover:text-text-secondary transition-all w-full"
         >
           <svg
             width="18"
             height="18"
             viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
+            fill="currentColor"
+            className={`shrink-0 transition-transform duration-300 ${collapsed ? "rotate-180" : ""}`}
           >
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" />
+            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
           </svg>
-          {!collapsed && <span>Sign Out</span>}
+          {!collapsed && <span className="text-sm whitespace-nowrap">Collapse</span>}
         </button>
+        {user && (
+          <Link
+            href="/dashboard/profile"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-surface-light transition-all mt-1"
+          >
+            <UserInitials name={user.name} />
+            {!collapsed && (
+              <div className="overflow-hidden">
+                <p className="text-sm font-semibold text-text truncate">{user.name}</p>
+                <p className="text-xs text-text-muted truncate">{user.role}</p>
+              </div>
+            )}
+          </Link>
+        )}
       </div>
     </aside>
   );

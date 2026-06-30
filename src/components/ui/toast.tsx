@@ -3,10 +3,10 @@
 import { useToastStore } from "@/stores/toast";
 
 const typeClasses = {
-  success: "bg-success",
-  error: "bg-danger",
-  info: "bg-primary",
-  warning: "bg-warning",
+  success: "bg-success/90 backdrop-blur-xl border border-white/[0.06]",
+  error: "bg-danger/90 backdrop-blur-xl border border-white/[0.06]",
+  info: "bg-primary/90 backdrop-blur-xl border border-white/[0.06]",
+  warning: "bg-warning/90 backdrop-blur-xl border border-white/[0.06]",
 };
 
 export function ToastContainer() {
@@ -15,11 +15,11 @@ export function ToastContainer() {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-sm">
+    <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 max-w-sm pointer-events-none">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`${typeClasses[toast.type]} text-white px-4 py-3 rounded-lg shadow-lg flex items-center justify-between gap-3 animate-in slide-in-from-right`}
+          className={`${typeClasses[toast.type]} text-white px-5 py-3 rounded-lg shadow-lg flex items-center justify-between gap-3 animate-fade-in-up pointer-events-auto`}
         >
           <p className="text-sm font-medium">{toast.message}</p>
           <button

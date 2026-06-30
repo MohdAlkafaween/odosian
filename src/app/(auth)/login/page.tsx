@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
 
@@ -59,54 +58,50 @@ export default function LoginPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="text-xl font-semibold text-text">Sign In</h2>
-        <p className="text-sm text-text-secondary">
-          Enter your credentials to access the platform
-        </p>
-      </CardHeader>
-      <CardBody>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {errors.form && (
-            <div className="bg-danger/10 border border-danger/20 text-danger text-sm rounded-lg px-4 py-3">
-              {errors.form}
-            </div>
-          )}
-          <Input
-            label="Email"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="analyst@example.com"
-            required
-          />
-          <div>
-            <Input
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
-              placeholder="••••••••"
-              required
-            />
-            <div className="text-right mt-1">
-              <Link href="/forgot-password" className="text-xs text-primary hover:underline">
-                Forgot password?
-              </Link>
-            </div>
+    <div className="bg-surface border border-border rounded-xl p-8 shadow-[0_0_40px_rgba(76,189,250,0.05)]">
+      <h2 className="text-xl font-bold text-text mb-1">Welcome back, defender</h2>
+      <p className="text-sm text-text-muted mb-6">Sign into your command center</p>
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {errors.form && (
+          <div className="bg-danger/10 border border-danger/20 text-danger text-sm rounded-lg px-4 py-3 flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+            </svg>
+            {errors.form}
           </div>
-          <Button type="submit" className="w-full" loading={loading}>
-            Sign In
-          </Button>
-        </form>
-        <p className="text-sm text-text-secondary text-center mt-4">
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="text-primary hover:underline">
-            Create one
-          </Link>
-        </p>
-      </CardBody>
-    </Card>
+        )}
+        <Input
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder="defender@example.com"
+          required
+        />
+        <Input
+          label="Password"
+          type="password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          placeholder="••••••••"
+          required
+        />
+        <Button type="submit" className="w-full gap-2" loading={loading}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+          </svg>
+          Shield Up
+        </Button>
+      </form>
+      <div className="flex justify-between mt-4 text-sm">
+        <Link href="/forgot-password" className="text-primary hover:underline">
+          Forgot password?
+        </Link>
+        <Link href="/register" className="text-primary hover:underline">
+          Join the wall &rarr;
+        </Link>
+      </div>
+    </div>
   );
 }

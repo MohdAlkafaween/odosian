@@ -57,7 +57,7 @@ export default function TemplatesPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-text">Rule Templates</h1>
+          <h1 className="text-[28px] font-extrabold text-text">Shield Template Gallery</h1>
           <p className="text-sm text-text-secondary mt-1">
             Pre-built detection rule templates to get started quickly
           </p>

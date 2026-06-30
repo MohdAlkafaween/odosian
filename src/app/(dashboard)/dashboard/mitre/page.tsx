@@ -52,7 +52,7 @@ export default function MitrePage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text">MITRE ATT&CK Browser</h1>
+        <h1 className="text-[28px] font-extrabold text-text">MITRE ATT&CK Shield Map</h1>
         <p className="text-sm text-text-secondary mt-1">
           Explore tactics and techniques with detection rule coverage
         </p>

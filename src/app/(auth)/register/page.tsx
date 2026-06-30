@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { useToastStore } from "@/stores/toast";
 
 export default function RegisterPage() {
@@ -73,68 +72,63 @@ export default function RegisterPage() {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <h2 className="text-xl font-semibold text-text">Create Account</h2>
-        <p className="text-sm text-text-secondary">
-          Register to start analyzing detection rules
-        </p>
-      </CardHeader>
-      <CardBody>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {errors.form && (
-            <div className="bg-danger/10 border border-danger/20 text-danger text-sm rounded-lg px-4 py-3">
-              {errors.form}
-            </div>
-          )}
-          <Input
-            label="Full Name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Jane Doe"
-            error={errors.name}
-            required
-          />
-          <Input
-            label="Email"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="analyst@example.com"
-            error={errors.email}
-            required
-          />
-          <Input
-            label="Password"
-            type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="Min 8 chars, uppercase, number, special"
-            error={errors.password}
-            required
-          />
-          <Input
-            label="Confirm Password"
-            type="password"
-            value={form.confirmPassword}
-            onChange={(e) =>
-              setForm({ ...form, confirmPassword: e.target.value })
-            }
-            placeholder="••••••••"
-            error={errors.confirmPassword}
-            required
-          />
-          <Button type="submit" className="w-full" loading={loading}>
-            Create Account
-          </Button>
-        </form>
-        <p className="text-sm text-text-secondary text-center mt-4">
-          Already have an account?{" "}
-          <Link href="/login" className="text-primary hover:underline">
-            Sign in
-          </Link>
-        </p>
-      </CardBody>
-    </Card>
+    <div className="bg-surface border border-border rounded-xl p-8 shadow-[0_0_40px_rgba(76,189,250,0.05)]">
+      <h2 className="text-xl font-bold text-text mb-1">Forge Your Shield</h2>
+      <p className="text-sm text-text-muted mb-6">Create your defender account</p>
+
+      <form onSubmit={handleSubmit} className="space-y-3.5">
+        {errors.form && (
+          <div className="bg-danger/10 border border-danger/20 text-danger text-sm rounded-lg px-4 py-3">
+            {errors.form}
+          </div>
+        )}
+        <Input
+          label="Full Name"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          placeholder="Shield Bearer"
+          error={errors.name}
+          required
+        />
+        <Input
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+          placeholder="defender@example.com"
+          error={errors.email}
+          required
+        />
+        <Input
+          label="Password"
+          type="password"
+          value={form.password}
+          onChange={(e) => setForm({ ...form, password: e.target.value })}
+          placeholder="••••••••"
+          error={errors.password}
+          required
+        />
+        <Input
+          label="Confirm Password"
+          type="password"
+          value={form.confirmPassword}
+          onChange={(e) =>
+            setForm({ ...form, confirmPassword: e.target.value })
+          }
+          placeholder="••••••••"
+          error={errors.confirmPassword}
+          required
+        />
+        <Button type="submit" className="w-full" loading={loading}>
+          Forge Your Shield
+        </Button>
+      </form>
+      <p className="text-sm text-center mt-4">
+        <span className="text-text-muted">Already a defender? </span>
+        <Link href="/login" className="text-primary hover:underline">
+          Sign in
+        </Link>
+      </p>
+    </div>
   );
 }

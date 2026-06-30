@@ -63,7 +63,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-2xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-text">Profile</h1>
+        <h1 className="text-[28px] font-extrabold text-text">Defender Profile</h1>
         <p className="text-sm text-text-secondary mt-1">View your account info and change your password</p>
       </div>
 
