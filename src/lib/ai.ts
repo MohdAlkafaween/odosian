@@ -398,3 +398,83 @@ export async function callAI<T>(promptName: string, userMessage: string): Promis
 
   throw lastError || new AIError("AI call failed after retries", 503, false);
 }
+
+export async function callAIWithSystemPrompt<T>(systemPrompt: string, userMessage: string): Promise<AICallResult<T>> {
+  const provider = await getProvider();
+  if (!provider.apiKey) throw new Error("AI provider API key is not configured");
+
+  const url = `${provider.baseUrl}/chat/completions`;
+
+  const body = {
+    model: provider.model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    max_tokens: provider.maxTokens,
+    temperature: provider.temperature,
+    response_format: { type: "json_object" },
+  };
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      const delay = (lastError instanceof AIError && lastError.retryAfterMs)
+        ? lastError.retryAfterMs
+        : BACKOFF_DELAYS[attempt - 1];
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    const start = Date.now();
+
+    let res: Response;
+    try {
+      res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${provider.apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      const netMsg = e instanceof Error ? e.message : "Unknown network error";
+      lastError = new AIError(`Failed to connect to AI provider: ${netMsg}`, 503, true);
+      if (attempt < MAX_ATTEMPTS - 1) continue;
+      throw lastError;
+    }
+
+    const latencyMs = Date.now() - start;
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      const aiErr = classifyProviderError(res.status, errText);
+      if (res.status === 429) {
+        const retryAfter = res.headers.get("retry-after");
+        if (retryAfter) {
+          const seconds = parseInt(retryAfter);
+          if (!isNaN(seconds)) aiErr.retryAfterMs = Math.min(seconds * 1000, 30000);
+        }
+      }
+      if (aiErr.retryable && attempt < MAX_ATTEMPTS - 1) { lastError = aiErr; continue; }
+      throw aiErr;
+    }
+
+    try {
+      const data = await res.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      const tokensUsed = data.usage?.total_tokens ?? data.usage?.prompt_tokens
+        ? (data.usage.prompt_tokens || 0) + (data.usage.completion_tokens || 0)
+        : 0;
+
+      return { result: parseAIJson<T>(content), modelUsed: provider.name, tokensUsed, latencyMs };
+    } catch (e) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (attempt < MAX_ATTEMPTS - 1) continue;
+      throw lastError;
+    }
+  }
+
+  throw lastError || new AIError("AI call failed after retries", 503, false);
+}

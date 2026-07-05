@@ -110,6 +110,7 @@ export const providerUpdateSchema = z.object({
   name: z.string().min(1).max(100).optional(),
   baseUrl: z.string().url().optional(),
   model: z.string().min(1).max(100).optional(),
+  apiKey: z.string().max(500).optional(),
   isActive: z.boolean().optional(),
   isDefault: z.boolean().optional(),
   maxTokens: z.number().int().min(100).max(32000).optional(),

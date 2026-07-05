@@ -653,6 +653,142 @@ Be concise but thorough. Focus on the most impactful issues.`;
   });
   console.log("Custom field definitions seeded.");
 
+  // --- MITRE Attack Prompts ---
+  const mitreTactics = [
+    { id: "TA0043", name: "Reconnaissance", techniques: [
+      { id: "T1595", name: "Active Scanning" }, { id: "T1592", name: "Gather Victim Host Information" },
+      { id: "T1589", name: "Gather Victim Identity Information" }, { id: "T1590", name: "Gather Victim Network Information" },
+      { id: "T1591", name: "Gather Victim Org Information" }, { id: "T1598", name: "Phishing for Information" },
+      { id: "T1597", name: "Search Closed Sources" },
+    ]},
+    { id: "TA0042", name: "Resource Development", techniques: [
+      { id: "T1583", name: "Acquire Infrastructure" }, { id: "T1586", name: "Compromise Accounts" },
+      { id: "T1584", name: "Compromise Infrastructure" }, { id: "T1587", name: "Develop Capabilities" },
+      { id: "T1585", name: "Establish Accounts" }, { id: "T1588", name: "Obtain Capabilities" },
+    ]},
+    { id: "TA0001", name: "Initial Access", techniques: [
+      { id: "T1189", name: "Drive-by Compromise" }, { id: "T1190", name: "Exploit Public-Facing Application" },
+      { id: "T1133", name: "External Remote Services" }, { id: "T1200", name: "Hardware Additions" },
+      { id: "T1566", name: "Phishing" }, { id: "T1091", name: "Replication Through Removable Media" },
+      { id: "T1195", name: "Supply Chain Compromise" }, { id: "T1199", name: "Trusted Relationship" },
+      { id: "T1078", name: "Valid Accounts" },
+    ]},
+    { id: "TA0002", name: "Execution", techniques: [
+      { id: "T1059", name: "Command and Scripting Interpreter" }, { id: "T1203", name: "Exploitation for Client Execution" },
+      { id: "T1559", name: "Inter-Process Communication" }, { id: "T1106", name: "Native API" },
+      { id: "T1053", name: "Scheduled Task/Job" }, { id: "T1129", name: "Shared Modules" },
+      { id: "T1204", name: "User Execution" }, { id: "T1047", name: "Windows Management Instrumentation" },
+    ]},
+    { id: "TA0003", name: "Persistence", techniques: [
+      { id: "T1098", name: "Account Manipulation" }, { id: "T1197", name: "BITS Jobs" },
+      { id: "T1547", name: "Boot or Logon Autostart Execution" }, { id: "T1136", name: "Create Account" },
+      { id: "T1543", name: "Create or Modify System Process" }, { id: "T1546", name: "Event Triggered Execution" },
+      { id: "T1574", name: "Hijack Execution Flow" },
+    ]},
+    { id: "TA0004", name: "Privilege Escalation", techniques: [
+      { id: "T1548", name: "Abuse Elevation Control Mechanism" }, { id: "T1134", name: "Access Token Manipulation" },
+      { id: "T1484", name: "Domain Policy Modification" }, { id: "T1068", name: "Exploitation for Privilege Escalation" },
+      { id: "T1055", name: "Process Injection" },
+    ]},
+    { id: "TA0005", name: "Defense Evasion", techniques: [
+      { id: "T1140", name: "Deobfuscate/Decode Files or Information" }, { id: "T1070", name: "Indicator Removal" },
+      { id: "T1036", name: "Masquerading" }, { id: "T1027", name: "Obfuscated Files or Information" },
+      { id: "T1218", name: "System Binary Proxy Execution" }, { id: "T1112", name: "Modify Registry" },
+      { id: "T1562", name: "Impair Defenses" },
+    ]},
+    { id: "TA0006", name: "Credential Access", techniques: [
+      { id: "T1110", name: "Brute Force" }, { id: "T1003", name: "OS Credential Dumping" },
+      { id: "T1555", name: "Credentials from Password Stores" }, { id: "T1056", name: "Input Capture" },
+      { id: "T1557", name: "Adversary-in-the-Middle" }, { id: "T1552", name: "Unsecured Credentials" },
+      { id: "T1558", name: "Steal or Forge Kerberos Tickets" },
+    ]},
+    { id: "TA0007", name: "Discovery", techniques: [
+      { id: "T1087", name: "Account Discovery" }, { id: "T1083", name: "File and Directory Discovery" },
+      { id: "T1046", name: "Network Service Discovery" }, { id: "T1135", name: "Network Share Discovery" },
+      { id: "T1057", name: "Process Discovery" }, { id: "T1018", name: "Remote System Discovery" },
+      { id: "T1082", name: "System Information Discovery" }, { id: "T1016", name: "System Network Configuration Discovery" },
+    ]},
+    { id: "TA0008", name: "Lateral Movement", techniques: [
+      { id: "T1210", name: "Exploitation of Remote Services" }, { id: "T1534", name: "Internal Spearphishing" },
+      { id: "T1570", name: "Lateral Tool Transfer" }, { id: "T1021", name: "Remote Services" },
+      { id: "T1080", name: "Taint Shared Content" }, { id: "T1550", name: "Use Alternate Authentication Material" },
+    ]},
+    { id: "TA0009", name: "Collection", techniques: [
+      { id: "T1560", name: "Archive Collected Data" }, { id: "T1123", name: "Audio Capture" },
+      { id: "T1119", name: "Automated Collection" }, { id: "T1005", name: "Data from Local System" },
+      { id: "T1039", name: "Data from Network Shared Drive" }, { id: "T1114", name: "Email Collection" },
+      { id: "T1113", name: "Screen Capture" },
+    ]},
+    { id: "TA0011", name: "Command and Control", techniques: [
+      { id: "T1071", name: "Application Layer Protocol" }, { id: "T1132", name: "Data Encoding" },
+      { id: "T1001", name: "Data Obfuscation" }, { id: "T1568", name: "Dynamic Resolution" },
+      { id: "T1573", name: "Encrypted Channel" }, { id: "T1105", name: "Ingress Tool Transfer" },
+      { id: "T1571", name: "Non-Standard Port" }, { id: "T1572", name: "Protocol Tunneling" },
+    ]},
+    { id: "TA0010", name: "Exfiltration", techniques: [
+      { id: "T1020", name: "Automated Exfiltration" }, { id: "T1030", name: "Data Transfer Size Limits" },
+      { id: "T1048", name: "Exfiltration Over Alternative Protocol" }, { id: "T1041", name: "Exfiltration Over C2 Channel" },
+      { id: "T1567", name: "Exfiltration Over Web Service" }, { id: "T1029", name: "Scheduled Transfer" },
+    ]},
+    { id: "TA0040", name: "Impact", techniques: [
+      { id: "T1531", name: "Account Access Removal" }, { id: "T1485", name: "Data Destruction" },
+      { id: "T1486", name: "Data Encrypted for Impact" }, { id: "T1565", name: "Data Manipulation" },
+      { id: "T1491", name: "Defacement" }, { id: "T1561", name: "Disk Wipe" },
+      { id: "T1499", name: "Endpoint Denial of Service" }, { id: "T1498", name: "Network Denial of Service" },
+      { id: "T1496", name: "Resource Hijacking" },
+    ]},
+  ];
+
+  const seenTechniques = new Set<string>();
+  const mitrePromptData: { id: string; techniqueId: string; techniqueName: string; tacticId: string; tacticName: string; systemPrompt: string }[] = [];
+
+  for (const tactic of mitreTactics) {
+    for (const tech of tactic.techniques) {
+      if (seenTechniques.has(tech.id)) continue;
+      seenTechniques.add(tech.id);
+      mitrePromptData.push({
+        id: uuidv4(),
+        techniqueId: tech.id,
+        techniqueName: tech.name,
+        tacticId: tactic.id,
+        tacticName: tactic.name,
+        systemPrompt: `You are a senior red team operator and MITRE ATT&CK expert. The user wants to simulate the technique "${tech.name}" (${tech.id}) under the "${tactic.name}" tactic (${tactic.id}).
+
+Your role is to help authorized security professionals test their defenses in a controlled lab environment against this specific technique. Provide:
+
+1. A brief explanation of what this technique does and why adversaries use it
+2. Prerequisites (tools, access level, target OS)
+3. Step-by-step simulation commands that can be run on a Kali Linux machine against a target lab environment
+4. Expected artifacts and indicators of compromise (IOCs) that defenders should detect
+5. Recommended Elastic SIEM detection rules (KQL or EQL) to catch this technique
+6. Common evasion variants attackers use and how to detect those too
+
+Format your response as JSON:
+{
+  "explanation": "<what this technique is and why it matters>",
+  "prerequisites": ["<tool or access requirement>"],
+  "steps": [
+    { "description": "<what this step does>", "command": "<exact command to run>", "notes": "<important caveats>" }
+  ],
+  "expectedArtifacts": ["<IOC or artifact>"],
+  "detectionRules": [
+    { "name": "<rule name>", "query": "<KQL or EQL query>", "language": "<kuery|eql>" }
+  ],
+  "evasionVariants": [
+    { "variant": "<evasion name>", "detection": "<how to detect it>" }
+  ]
+}
+
+IMPORTANT: This is for authorized security testing in isolated lab environments only. All commands should target the user's own lab infrastructure.`,
+      });
+    }
+  }
+
+  for (const prompt of mitrePromptData) {
+    await prisma.mitreAttackPrompt.create({ data: prompt });
+  }
+  console.log(`MITRE Attack Prompts seeded (${mitrePromptData.length} techniques).`);
+
   console.log("Seeding complete!");
 }
 

@@ -33,6 +33,9 @@ interface Provider {
   temperature: number;
   costPerInputToken: number;
   costPerOutputToken: number;
+  apiKeySet: boolean;
+  apiKeyHint: string;
+  apiKey?: string;
 }
 
 interface PromptItem {
@@ -44,6 +47,17 @@ interface PromptItem {
   isActive: boolean;
   isDefault: boolean;
   version: number;
+}
+
+interface KaliConnection {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  authType: string;
+  isActive: boolean;
+  lastUsed: string | null;
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -80,15 +94,26 @@ export default function SettingsPage() {
   const [editingPrompt, setEditingPrompt] = useState<PromptItem | null>(null);
   const [savingProvider, setSavingProvider] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
+  const [kaliConnections, setKaliConnections] = useState<KaliConnection[]>([]);
+  const [editingKali, setEditingKali] = useState<Partial<KaliConnection> | null>(null);
+  const [savingKali, setSavingKali] = useState(false);
+  const [testingProvider, setTestingProvider] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings");
-      if (res.status === 403) { setLoading(false); return; }
-      const data = await res.json();
+      const [settingsRes, kaliRes] = await Promise.all([
+        fetch("/api/settings"),
+        fetch("/api/attack-lab/kali/settings"),
+      ]);
+      if (settingsRes.status === 403) { setLoading(false); return; }
+      const data = await settingsRes.json();
       setSettings(data.settings || {});
       setProviders(data.providers || []);
       setPrompts(data.prompts || []);
+      if (kaliRes.ok) {
+        const kaliData = await kaliRes.json();
+        setKaliConnections(kaliData.connections || []);
+      }
     } catch { /* ignore */ }
     finally { setLoading(false); }
   }, []);
@@ -157,6 +182,7 @@ export default function SettingsPage() {
           isDefault: editingProvider.isDefault,
           maxTokens: editingProvider.maxTokens,
           temperature: editingProvider.temperature,
+          ...(editingProvider.apiKey ? { apiKey: editingProvider.apiKey } : {}),
         }),
       });
       if (!res.ok) { const d = await res.json(); addToast("error", d.error || "Failed"); return; }
@@ -189,6 +215,40 @@ export default function SettingsPage() {
     finally { setSavingPrompt(false); }
   };
 
+  const saveKali = async () => {
+    if (!editingKali || !editingKali.host) return;
+    setSavingKali(true);
+    try {
+      const res = await fetch("/api/attack-lab/kali/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingKali),
+      });
+      if (!res.ok) { const d = await res.json(); addToast("error", d.error || "Failed"); return; }
+      addToast("success", editingKali.id ? "Connection updated" : "Connection created");
+      setEditingKali(null);
+      fetchSettings();
+    } catch { addToast("error", "Failed to save connection"); }
+    finally { setSavingKali(false); }
+  };
+
+  const testProvider = async (providerId: string) => {
+    setTestingProvider(true);
+    try {
+      const res = await fetch("/api/analysis/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: "process.name: test", language: "kuery" }),
+      });
+      if (res.ok) addToast("success", "AI provider connection successful");
+      else {
+        const data = await res.json();
+        addToast("error", `Connection test failed: ${data.error || "Unknown error"}`);
+      }
+    } catch { addToast("error", "Connection test failed"); }
+    finally { setTestingProvider(false); }
+  };
+
   const isJsonSetting = (key: string) => key === "analysis.scoringWeights";
   const isNumberSetting = (key: string) =>
     ["ai.temperature", "ai.maxTokens", "ai.maxRetries"].includes(key);
@@ -196,6 +256,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: "general", label: "General Settings" },
     { id: "providers", label: "AI Providers" },
+    { id: "connections", label: "API & Connections" },
     { id: "prompts", label: "Prompts" },
     { id: "webhooks", label: "Webhooks" },
     { id: "customfields", label: "Custom Fields" },
@@ -286,6 +347,42 @@ export default function SettingsPage() {
                         <Input label="Name" value={editingProvider.name} onChange={(e) => setEditingProvider({ ...editingProvider, name: e.target.value })} />
                         <Input label="Model" value={editingProvider.model} onChange={(e) => setEditingProvider({ ...editingProvider, model: e.target.value })} />
                         <Input label="Base URL" value={editingProvider.baseUrl} onChange={(e) => setEditingProvider({ ...editingProvider, baseUrl: e.target.value })} />
+                        <div className="md:col-span-2">
+                          <label className="block text-xs font-medium text-text-secondary mb-1.5">
+                            API Key
+                            {editingProvider.apiKeySet && !editingProvider.apiKey && (
+                              <span className="ml-2 text-text-muted font-normal">Current: {editingProvider.apiKeyHint}</span>
+                            )}
+                          </label>
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={editingProvider.apiKey || ""}
+                              onChange={(e) => setEditingProvider({ ...editingProvider, apiKey: e.target.value })}
+                              placeholder={editingProvider.apiKeySet ? "Leave blank to keep current key" : "Enter API key"}
+                              className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary font-mono"
+                              autoComplete="off"
+                            />
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              {editingProvider.apiKeySet ? (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-success">
+                                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                                </svg>
+                              ) : (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-warning">
+                                  <circle cx="12" cy="12" r="10" />
+                                  <line x1="12" y1="8" x2="12" y2="12" />
+                                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-xs text-text-muted mt-1">
+                            {editingProvider.apiKeySet
+                              ? "Key is set and encrypted. Enter a new value to replace it."
+                              : "No API key configured. AI features will not work without one."}
+                          </p>
+                        </div>
                         <Input label="Max Tokens" type="number" value={String(editingProvider.maxTokens)} onChange={(e) => setEditingProvider({ ...editingProvider, maxTokens: parseInt(e.target.value) || 0 })} />
                         <Input label="Temperature" type="number" step="0.1" value={String(editingProvider.temperature)} onChange={(e) => setEditingProvider({ ...editingProvider, temperature: parseFloat(e.target.value) || 0 })} />
                       </div>
@@ -320,13 +417,123 @@ export default function SettingsPage() {
                             <span>Max Tokens: <span className="text-text-secondary">{p.maxTokens}</span></span>
                             <span>Temp: <span className="text-text-secondary">{p.temperature}</span></span>
                           </div>
-                          <p className="text-xs text-text-muted mt-1 font-mono">{p.baseUrl}</p>
+                          <div className="flex items-center gap-3 mt-1">
+                            <p className="text-xs text-text-muted font-mono">{p.baseUrl}</p>
+                            <span className={`text-xs flex items-center gap-1 ${p.apiKeySet ? "text-success" : "text-warning"}`}>
+                              {p.apiKeySet ? (
+                                <>
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+                                  Key: {p.apiKeyHint}
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                                  No API key
+                                </>
+                              )}
+                            </span>
+                          </div>
                         </div>
-                        <Button variant="outline" size="sm" onClick={() => setEditingProvider({ ...p })}>Edit</Button>
+                        <div className="flex gap-2">
+                          {p.isDefault && (
+                            <Button variant="ghost" size="sm" onClick={() => testProvider(p.id)} loading={testingProvider}>Test</Button>
+                          )}
+                          <Button variant="outline" size="sm" onClick={() => setEditingProvider({ ...p })}>Edit</Button>
+                        </div>
                       </div>
                     </CardBody>
                   </Card>
                 ))}
+              </div>
+            )}
+
+            {activeTab === "connections" && (
+              <div className="space-y-6">
+                {/* AI Provider Test */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-semibold text-text">AI Provider Connection</h2>
+                      <Button size="sm" onClick={() => testProvider(providers[0]?.id)} loading={testingProvider}>
+                        Test Connection
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardBody>
+                    <p className="text-sm text-text-secondary mb-2">
+                      Test the active AI provider connection. This sends a minimal query to verify API key and endpoint are working.
+                    </p>
+                    {providers.filter((p) => p.isDefault).map((p) => (
+                      <div key={p.id} className="flex items-center gap-3 bg-surface-light rounded-lg px-4 py-3 border border-border">
+                        <Badge preset="production">Default</Badge>
+                        <span className="text-sm text-text font-medium">{p.name}</span>
+                        <span className="text-xs text-text-muted">({p.model})</span>
+                      </div>
+                    ))}
+                  </CardBody>
+                </Card>
+
+                {/* Kali Connections */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <h2 className="font-semibold text-text">Kali Linux Connections</h2>
+                      <Button size="sm" onClick={() => setEditingKali({ name: "", host: "", port: 22, username: "kali", authType: "password", isActive: true })}>
+                        Add Connection
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardBody className="space-y-3">
+                    <p className="text-xs text-text-muted mb-2">
+                      Configure SSH connections to Kali Linux machines for the Attack Simulation Lab.
+                    </p>
+
+                    {editingKali && (
+                      <div className="bg-surface-light border border-primary/30 rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-semibold text-text">
+                            {editingKali.id ? "Edit Connection" : "New Connection"}
+                          </h3>
+                          <div className="flex gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => setEditingKali(null)}>Cancel</Button>
+                            <Button size="sm" onClick={saveKali} loading={savingKali}>Save</Button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <Input label="Name" value={editingKali.name || ""} onChange={(e) => setEditingKali({ ...editingKali, name: e.target.value })} placeholder="My Kali Lab" />
+                          <Input label="Host" value={editingKali.host || ""} onChange={(e) => setEditingKali({ ...editingKali, host: e.target.value })} placeholder="192.168.1.100" />
+                          <Input label="Port" type="number" value={String(editingKali.port || 22)} onChange={(e) => setEditingKali({ ...editingKali, port: parseInt(e.target.value) || 22 })} />
+                          <Input label="Username" value={editingKali.username || "kali"} onChange={(e) => setEditingKali({ ...editingKali, username: e.target.value })} />
+                        </div>
+                        <div className="flex gap-4">
+                          <label className="flex items-center gap-2 text-sm text-text">
+                            <input type="checkbox" checked={editingKali.isActive !== false} onChange={(e) => setEditingKali({ ...editingKali, isActive: e.target.checked })} className="accent-primary" />
+                            Active
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {kaliConnections.length === 0 && !editingKali && (
+                      <p className="text-sm text-text-muted text-center py-4">No Kali connections configured. Add one to use the Attack Simulation Lab.</p>
+                    )}
+
+                    {kaliConnections.map((c) => (
+                      <div key={c.id} className="flex items-center justify-between bg-surface-light rounded-lg px-4 py-3 border border-border">
+                        <div>
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-sm font-medium text-text">{c.name}</span>
+                            <Badge preset={c.isActive ? "reviewed" : "deprecated"}>
+                              {c.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-text-muted font-mono">{c.username}@{c.host}:{c.port}</p>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={() => setEditingKali({ ...c })}>Edit</Button>
+                      </div>
+                    ))}
+                  </CardBody>
+                </Card>
               </div>
             )}
 

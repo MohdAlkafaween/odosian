@@ -22,9 +22,15 @@ export const PUT = requireRole("ADMIN")(async (request: AuthenticatedRequest, co
       });
     }
 
+    const { apiKey, ...updateFields } = validated.data;
+    const updateData: Record<string, unknown> = { ...updateFields };
+    if (apiKey && apiKey.length > 0) {
+      updateData.apiKey = apiKey;
+    }
+
     const provider = await prisma.aIProvider.update({
       where: { id },
-      data: validated.data,
+      data: updateData,
     });
 
     logAudit({
@@ -32,12 +38,18 @@ export const PUT = requireRole("ADMIN")(async (request: AuthenticatedRequest, co
       action: "PROVIDER_UPDATED",
       targetType: "provider",
       targetId: id,
-      details: { name: provider.name },
+      details: { name: provider.name, apiKeyChanged: !!apiKey },
       ipAddress: getClientIp(request),
     });
 
-    const { apiKey: _apiKey, ...safe } = provider;
-    return NextResponse.json({ provider: safe });
+    const { apiKey: storedKey, ...safe } = provider;
+    return NextResponse.json({
+      provider: {
+        ...safe,
+        apiKeySet: storedKey.length > 0,
+        apiKeyHint: storedKey.length > 8 ? storedKey.slice(0, 4) + "****" + storedKey.slice(-4) : storedKey.length > 0 ? "****" : "",
+      },
+    });
   } catch (e) {
     console.error("Failed to update provider:", e);
     return errorResponse("Failed to update provider", 500);

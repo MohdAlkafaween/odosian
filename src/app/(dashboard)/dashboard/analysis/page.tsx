@@ -23,6 +23,10 @@ interface RuleOption {
   title: string;
   severity: string;
   language: string;
+  status: string;
+  ruleType: string;
+  tags: string;
+  mitreMappings?: { tacticName: string }[];
 }
 
 function AnalysisContent() {
@@ -37,14 +41,18 @@ function AnalysisContent() {
   useEffect(() => {
     fetch("/api/rules?limit=100")
       .then((r) => r.json())
-      .then((d) => setRules(d.rules || []))
+      .then((d) => setRules((d.rules || []).map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        title: r.title as string,
+        severity: r.severity as string,
+        language: r.language as string,
+        status: r.status as string,
+        ruleType: r.ruleType as string,
+        tags: r.tags as string,
+        mitreMappings: r.mitreMappings as { tacticName: string }[] | undefined,
+      }))))
       .catch(() => {});
   }, []);
-
-  const ruleOptions = [
-    { value: "", label: "Select a rule..." },
-    ...rules.map((r) => ({ value: r.id, label: r.title })),
-  ];
 
   const tabs = [
     { id: "analyze", label: "Analyze Rule" },
@@ -72,13 +80,13 @@ function AnalysisContent() {
           <>
             {activeTab === "analyze" && (
               <AnalyzeTab
-                rules={ruleOptions}
+                rules={rules}
                 defaultRuleId={preselectedRuleId}
                 addToast={addToast}
               />
             )}
             {activeTab === "enhance" && (
-              <EnhanceTab rules={ruleOptions} addToast={addToast} />
+              <EnhanceTab rules={rules} addToast={addToast} />
             )}
             {activeTab === "generate" && (
               <GenerateTab addToast={addToast} router={router} />
@@ -93,8 +101,114 @@ function AnalysisContent() {
   );
 }
 
+function RuleSelector({ rules, selectedId, onSelect }: {
+  rules: RuleOption[];
+  selectedId: string;
+  onSelect: (id: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<{ severity?: string; status?: string; language?: string }>({});
+
+  const toggleFilter = (key: "severity" | "status" | "language", value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? undefined : value }));
+  };
+
+  const filtered = rules.filter((r) => {
+    if (filters.severity && r.severity !== filters.severity) return false;
+    if (filters.status && r.status !== filters.status) return false;
+    if (filters.language && r.language !== filters.language) return false;
+    if (search) {
+      const s = search.toLowerCase();
+      return r.title.toLowerCase().includes(s) || r.id.toLowerCase().includes(s);
+    }
+    return true;
+  });
+
+  const selected = rules.find((r) => r.id === selectedId);
+
+  const chipClass = (active: boolean) =>
+    `px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-all border ${
+      active
+        ? "bg-primary/20 text-primary border-primary/40"
+        : "bg-surface-light text-text-muted border-border hover:border-primary/30"
+    }`;
+
+  return (
+    <div className="space-y-3">
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search rules by title..."
+        className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+      />
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap gap-1.5">
+        {["critical", "high", "medium", "low"].map((s) => (
+          <button key={s} onClick={() => toggleFilter("severity", s)}
+            className={chipClass(filters.severity === s)}>
+            {s}
+          </button>
+        ))}
+        <span className="w-px h-5 bg-border self-center mx-1" />
+        {["production", "reviewed", "draft"].map((s) => (
+          <button key={s} onClick={() => toggleFilter("status", s)}
+            className={chipClass(filters.status === s)}>
+            {s}
+          </button>
+        ))}
+        <span className="w-px h-5 bg-border self-center mx-1" />
+        {["kuery", "eql", "esql"].map((s) => (
+          <button key={s} onClick={() => toggleFilter("language", s)}
+            className={chipClass(filters.language === s)}>
+            {s === "kuery" ? "KQL" : s.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* Rule list */}
+      <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
+        {filtered.length === 0 && (
+          <p className="text-xs text-text-muted text-center py-4">No rules match your filters</p>
+        )}
+        {filtered.map((rule) => (
+          <button
+            key={rule.id}
+            onClick={() => onSelect(rule.id)}
+            className={`w-full text-left px-3 py-2 rounded-lg transition-all border ${
+              selectedId === rule.id
+                ? "bg-primary/10 border-primary/40 ring-1 ring-primary/30"
+                : "bg-surface-light border-border hover:border-primary/20"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-sm truncate ${selectedId === rule.id ? "text-primary font-semibold" : "text-text"}`}>
+                {rule.title}
+              </span>
+              <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                <Badge preset={rule.severity as "critical" | "high" | "medium" | "low"} />
+                <span className="text-xs text-text-muted">{rule.language === "kuery" ? "KQL" : rule.language.toUpperCase()}</span>
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-primary shrink-0">
+            <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+          </svg>
+          <span className="text-sm text-primary font-medium truncate">{selected.title}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AnalyzeTab({ rules, defaultRuleId, addToast }: {
-  rules: { value: string; label: string }[];
+  rules: RuleOption[];
   defaultRuleId: string;
   addToast: ToastFn;
 }) {
@@ -134,7 +248,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
             <Button size="sm" variant={mode === "query" ? "primary" : "ghost"} onClick={() => setMode("query")}>Raw Query</Button>
           </div>
           {mode === "rule" ? (
-            <Select label="Detection Rule" value={ruleId} onChange={(e) => setRuleId(e.target.value)} options={rules} />
+            <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
           ) : (
             <>
               <Textarea label="Detection Query" value={rawQuery} onChange={(e) => setRawQuery(e.target.value)} rows={6} className="font-mono text-sm" placeholder="Enter your detection query..." />
@@ -282,7 +396,7 @@ function AnalyzeResults({ result }: { result: AnalyzeResult }) {
 }
 
 function EnhanceTab({ rules, addToast }: {
-  rules: { value: string; label: string }[];
+  rules: RuleOption[];
   addToast: ToastFn;
 }) {
   const [ruleId, setRuleId] = useState("");
@@ -319,7 +433,7 @@ function EnhanceTab({ rules, addToast }: {
     <div className="space-y-6">
       <Card>
         <CardBody className="space-y-4">
-          <Select label="Rule to Enhance" value={ruleId} onChange={(e) => { setRuleId(e.target.value); setNeedsAnalysis(false); }} options={rules} />
+          <RuleSelector rules={rules} selectedId={ruleId} onSelect={(id) => { setRuleId(id); setNeedsAnalysis(false); }} />
           <p className="text-xs text-text-muted">The rule must have been analyzed first. Enhancement uses analysis findings to improve the rule.</p>
           {needsAnalysis && (
             <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-start gap-2">

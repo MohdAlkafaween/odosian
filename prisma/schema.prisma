@@ -25,10 +25,11 @@ model User {
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
 
-  rules     Rule[]
-  analyses  Analysis[]
-  auditLogs AuditLog[]
-  projects  Project[]
+  rules             Rule[]
+  analyses          Analysis[]
+  auditLogs         AuditLog[]
+  projects          Project[]
+  attackSimulations AttackSimulation[]
 }
 
 model Rule {
@@ -232,4 +233,51 @@ model RateLimit {
   windowStart DateTime @default(now())
 
   @@unique([userId, endpoint])
+}
+
+model KaliConnection {
+  id        String   @id @default(uuid())
+  name      String   @default("Default Kali")
+  host      String
+  port      Int      @default(22)
+  username  String   @default("kali")
+  authType  String   @default("password")
+  isActive  Boolean  @default(true)
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  simulations AttackSimulation[]
+}
+
+model AttackSimulation {
+  id               String          @id @default(uuid())
+  techniqueId      String
+  techniqueName    String
+  tacticId         String
+  tacticName       String
+  status           String          @default("pending")
+  aiPrompt         String          @default("")
+  aiResponse       String          @default("")
+  commands         String          @default("[]")
+  commandOutputs   String          @default("[]")
+  notes            String          @default("")
+  kaliConnectionId String?
+  kaliConnection   KaliConnection? @relation(fields: [kaliConnectionId], references: [id], onDelete: SetNull)
+  userId           String
+  user             User            @relation(fields: [userId], references: [id])
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+model MitreAttackPrompt {
+  id            String   @id @default(uuid())
+  techniqueId   String   @unique
+  techniqueName String
+  tacticId      String
+  tacticName    String
+  systemPrompt  String
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

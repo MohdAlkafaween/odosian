@@ -19,7 +19,11 @@ export const GET = requireRole("ADMIN")(async (_request: AuthenticatedRequest) =
 
     return NextResponse.json({
       settings,
-      providers: providers.map(({ apiKey: _apiKey, ...rest }) => rest),
+      providers: providers.map(({ apiKey, ...rest }) => ({
+        ...rest,
+        apiKeySet: apiKey.length > 0,
+        apiKeyHint: apiKey.length > 8 ? apiKey.slice(0, 4) + "****" + apiKey.slice(-4) : apiKey.length > 0 ? "****" : "",
+      })),
       prompts: prompts.map((p) => ({
         ...p,
         systemPromptPreview: p.systemPrompt.slice(0, 200) + (p.systemPrompt.length > 200 ? "..." : ""),
