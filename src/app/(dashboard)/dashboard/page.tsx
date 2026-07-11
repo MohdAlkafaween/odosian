@@ -36,35 +36,34 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  critical: "bg-danger",
-  high: "bg-severity-high",
-  medium: "bg-warning",
-  low: "bg-primary",
+  critical: "bg-[#FB7185]",
+  high: "bg-[#F97316]",
+  medium: "bg-[#FBBF24]",
+  low: "bg-[#4CBDFA]",
 };
 
-function StatIcon({ type }: { type: string }) {
-  const icons: Record<string, { bg: string; svg: React.ReactNode }> = {
-    rules: {
-      bg: "rgba(76,189,250,0.12)",
-      svg: <svg width="20" height="20" viewBox="0 0 24 24" fill="#4CBDFA"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>,
-    },
-    analyses: {
-      bg: "rgba(132,226,158,0.12)",
-      svg: <svg width="20" height="20" viewBox="0 0 24 24" fill="#84E29E"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" /></svg>,
-    },
-    score: {
-      bg: "rgba(110,209,202,0.12)",
-      svg: <svg width="20" height="20" viewBox="0 0 24 24" fill="#6ED1CA"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" /></svg>,
-    },
-    critical: {
-      bg: "rgba(239,68,68,0.12)",
-      svg: <svg width="20" height="20" viewBox="0 0 24 24" fill="#EF4444"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>,
-    },
-  };
-  const icon = icons[type] || icons.rules;
+interface StatCardConfig {
+  label: string;
+  value: number;
+  color: string;
+  gradient: string;
+  icon: React.ReactNode;
+}
+
+function StatCard({ label, value, color, gradient, icon, valueClass }: StatCardConfig & { valueClass?: string }) {
   return (
-    <div className="w-10 h-10 rounded-[10px] flex items-center justify-center" style={{ background: icon.bg }}>
-      {icon.svg}
+    <div className="relative bg-surface border border-border rounded-xl p-5 overflow-hidden group hover:border-border/80 transition-all">
+      <div className="absolute inset-0 opacity-[0.04] group-hover:opacity-[0.07] transition-opacity" style={{ background: gradient }} />
+      <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: gradient }} />
+      <div className="relative flex justify-between items-start">
+        <div>
+          <div className="text-[11px] text-text-muted font-medium tracking-widest uppercase mb-2">{label}</div>
+          <div className={`text-3xl font-extrabold ${valueClass || ""}`} style={valueClass ? {} : { color }}>{value}</div>
+        </div>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${color}14` }}>
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }
@@ -101,44 +100,36 @@ export default function DashboardPage() {
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-7">
-        <div className="bg-surface border border-border rounded-[10px] p-5 card-hover-glow relative overflow-hidden">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-xs text-text-muted font-medium tracking-wider mb-2">TOTAL SHIELDS</div>
-              <div className="text-3xl font-extrabold text-primary">{stats?.totalRules ?? 0}</div>
-            </div>
-            <StatIcon type="rules" />
-          </div>
-        </div>
-        <div className="bg-surface border border-border rounded-[10px] p-5 card-hover-glow relative overflow-hidden">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-xs text-text-muted font-medium tracking-wider mb-2">ANALYSES RUN</div>
-              <div className="text-3xl font-extrabold text-success">{stats?.totalAnalyses ?? 0}</div>
-            </div>
-            <StatIcon type="analyses" />
-          </div>
-        </div>
-        <div className="bg-surface border border-border rounded-[10px] p-5 card-hover-glow relative overflow-hidden">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-xs text-text-muted font-medium tracking-wider mb-2">AVG SHIELD SCORE</div>
-              <div className={`text-3xl font-extrabold ${scoreColor(stats?.avgScore || 0)}`}>{stats?.avgScore ?? 0}</div>
-            </div>
-            <StatIcon type="score" />
-          </div>
-        </div>
-        <div className="bg-surface border border-border rounded-[10px] p-5 card-hover-glow relative overflow-hidden">
-          <div className="flex justify-between items-start">
-            <div>
-              <div className="text-xs text-text-muted font-medium tracking-wider mb-2">CRITICAL FINDINGS</div>
-              <div className={`text-3xl font-extrabold ${(stats?.criticalFindings || 0) > 0 ? "text-danger" : "text-success"}`}>
-                {stats?.criticalFindings ?? 0}
-              </div>
-            </div>
-            <StatIcon type="critical" />
-          </div>
-        </div>
+        <StatCard
+          label="Total Shields"
+          value={stats?.totalRules ?? 0}
+          color="#4CBDFA"
+          gradient="linear-gradient(135deg, #4CBDFA, #38BDF8)"
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#4CBDFA"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>}
+        />
+        <StatCard
+          label="Analyses Run"
+          value={stats?.totalAnalyses ?? 0}
+          color="#A78BFA"
+          gradient="linear-gradient(135deg, #A78BFA, #8B5CF6)"
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" /></svg>}
+        />
+        <StatCard
+          label="Avg Shield Score"
+          value={stats?.avgScore ?? 0}
+          color="#FBBF24"
+          gradient="linear-gradient(135deg, #FBBF24, #F59E0B)"
+          valueClass={scoreColor(stats?.avgScore || 0)}
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#FBBF24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" /></svg>}
+        />
+        <StatCard
+          label="Critical Findings"
+          value={stats?.criticalFindings ?? 0}
+          color="#FB7185"
+          gradient="linear-gradient(135deg, #FB7185, #F43F5E)"
+          valueClass={(stats?.criticalFindings || 0) > 0 ? "text-danger" : "text-success"}
+          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#FB7185"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>}
+        />
       </div>
 
       {/* Charts */}

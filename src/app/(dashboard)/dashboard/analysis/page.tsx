@@ -107,11 +107,15 @@ function RuleSelector({ rules, selectedId, onSelect }: {
   onSelect: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState(!selectedId);
   const [filters, setFilters] = useState<{ severity?: string; status?: string; language?: string }>({});
+  const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const toggleFilter = (key: "severity" | "status" | "language", value: string) => {
     setFilters((prev) => ({ ...prev, [key]: prev[key] === value ? undefined : value }));
   };
+
+  const clearFilters = () => setFilters({});
 
   const filtered = rules.filter((r) => {
     if (filters.severity && r.severity !== filters.severity) return false;
@@ -126,83 +130,167 @@ function RuleSelector({ rules, selectedId, onSelect }: {
 
   const selected = rules.find((r) => r.id === selectedId);
 
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...filtered].sort((a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4));
+
   const chipClass = (active: boolean) =>
-    `px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer transition-all border ${
+    `px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all border ${
       active
-        ? "bg-primary/20 text-primary border-primary/40"
-        : "bg-surface-light text-text-muted border-border hover:border-primary/30"
+        ? "bg-primary/20 text-primary border-primary/40 shadow-[0_0_8px_rgba(76,189,250,0.15)]"
+        : "bg-surface-light/50 text-text-muted border-border hover:border-primary/30 hover:text-text-secondary"
     }`;
+
+  const severityDot: Record<string, string> = {
+    critical: "bg-severity-critical",
+    high: "bg-severity-high",
+    medium: "bg-severity-medium",
+    low: "bg-primary",
+  };
+
+  if (selected && !expanded) {
+    return (
+      <button
+        onClick={() => setExpanded(true)}
+        className="w-full group"
+      >
+        <div className="flex items-center gap-3 bg-bg border border-primary/30 rounded-xl px-4 py-3 hover:border-primary/50 transition-all">
+          <div className="shrink-0 w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-primary">
+              <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0 text-left">
+            <p className="text-sm font-semibold text-text truncate">{selected.title}</p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${severityDot[selected.severity]}`} />
+              <span className="text-xs text-text-muted capitalize">{selected.severity}</span>
+              <span className="text-xs text-text-muted">·</span>
+              <span className="text-xs text-text-muted">{selected.language === "kuery" ? "KQL" : selected.language.toUpperCase()}</span>
+              <span className="text-xs text-text-muted">·</span>
+              <span className="text-xs text-text-muted capitalize">{selected.status}</span>
+            </div>
+          </div>
+          <div className="shrink-0 text-text-muted group-hover:text-primary transition-colors">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M9 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      </button>
+    );
+  }
 
   return (
     <div className="space-y-3">
-      <input
-        type="text"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Search rules by title..."
-        className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
-      />
+      {/* Search with icon */}
+      <div className="relative">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none">
+          <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+        </svg>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search rules..."
+          className="w-full bg-bg border border-border rounded-xl pl-9 pr-3 py-2.5 text-sm text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+        />
+        {search && (
+          <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+          </button>
+        )}
+      </div>
 
-      {/* Filter chips */}
-      <div className="flex flex-wrap gap-1.5">
-        {["critical", "high", "medium", "low"].map((s) => (
-          <button key={s} onClick={() => toggleFilter("severity", s)}
-            className={chipClass(filters.severity === s)}>
+      {/* Filter row */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-text-muted font-medium uppercase tracking-wider">Filter:</span>
+        {(["critical", "high", "medium", "low"] as const).map((s) => (
+          <button key={s} onClick={() => toggleFilter("severity", s)} className={chipClass(filters.severity === s)}>
+            <span className="flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${severityDot[s]}`} />
+              {s}
+            </span>
+          </button>
+        ))}
+        <span className="w-px h-4 bg-border mx-0.5" />
+        {(["production", "reviewed", "draft"] as const).map((s) => (
+          <button key={s} onClick={() => toggleFilter("status", s)} className={chipClass(filters.status === s)}>
             {s}
           </button>
         ))}
-        <span className="w-px h-5 bg-border self-center mx-1" />
-        {["production", "reviewed", "draft"].map((s) => (
-          <button key={s} onClick={() => toggleFilter("status", s)}
-            className={chipClass(filters.status === s)}>
-            {s}
-          </button>
-        ))}
-        <span className="w-px h-5 bg-border self-center mx-1" />
-        {["kuery", "eql", "esql"].map((s) => (
-          <button key={s} onClick={() => toggleFilter("language", s)}
-            className={chipClass(filters.language === s)}>
+        <span className="w-px h-4 bg-border mx-0.5" />
+        {(["kuery", "eql", "esql"] as const).map((s) => (
+          <button key={s} onClick={() => toggleFilter("language", s)} className={chipClass(filters.language === s)}>
             {s === "kuery" ? "KQL" : s.toUpperCase()}
           </button>
         ))}
+        {activeFilterCount > 0 && (
+          <button onClick={clearFilters} className="text-xs text-danger hover:text-danger-hover ml-1 transition-colors">
+            Clear ({activeFilterCount})
+          </button>
+        )}
+      </div>
+
+      {/* Results count */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-text-muted">
+          {filtered.length === rules.length ? `${rules.length} rules` : `${filtered.length} of ${rules.length} rules`}
+        </p>
+        {selected && (
+          <button onClick={() => setExpanded(false)} className="text-xs text-primary hover:text-primary-hover transition-colors">
+            Collapse
+          </button>
+        )}
       </div>
 
       {/* Rule list */}
-      <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-        {filtered.length === 0 && (
-          <p className="text-xs text-text-muted text-center py-4">No rules match your filters</p>
+      <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
+        {sorted.length === 0 && (
+          <div className="text-center py-8">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-text-muted mb-2">
+              <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z" />
+            </svg>
+            <p className="text-sm text-text-muted">No rules match your filters</p>
+            {activeFilterCount > 0 && (
+              <button onClick={clearFilters} className="text-xs text-primary mt-1 hover:text-primary-hover">Clear filters</button>
+            )}
+          </div>
         )}
-        {filtered.map((rule) => (
-          <button
-            key={rule.id}
-            onClick={() => onSelect(rule.id)}
-            className={`w-full text-left px-3 py-2 rounded-lg transition-all border ${
-              selectedId === rule.id
-                ? "bg-primary/10 border-primary/40 ring-1 ring-primary/30"
-                : "bg-surface-light border-border hover:border-primary/20"
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`text-sm truncate ${selectedId === rule.id ? "text-primary font-semibold" : "text-text"}`}>
-                {rule.title}
-              </span>
-              <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                <Badge preset={rule.severity as "critical" | "high" | "medium" | "low"} />
-                <span className="text-xs text-text-muted">{rule.language === "kuery" ? "KQL" : rule.language.toUpperCase()}</span>
+        {sorted.map((rule) => {
+          const isSelected = selectedId === rule.id;
+          return (
+            <button
+              key={rule.id}
+              onClick={() => { onSelect(rule.id); setExpanded(false); }}
+              className={`w-full text-left rounded-xl transition-all border group ${
+                isSelected
+                  ? "bg-primary/8 border-primary/40 shadow-[0_0_12px_rgba(76,189,250,0.08)]"
+                  : "bg-surface-light/40 border-border/60 hover:bg-surface-light hover:border-border"
+              }`}
+            >
+              <div className="flex items-center gap-3 px-3.5 py-2.5">
+                {/* Severity indicator bar */}
+                <div className={`w-1 self-stretch rounded-full shrink-0 ${severityDot[rule.severity]} ${isSelected ? "opacity-100" : "opacity-40 group-hover:opacity-70"} transition-opacity`} />
+                <div className="flex-1 min-w-0">
+                  <span className={`text-sm leading-tight ${isSelected ? "text-primary font-semibold" : "text-text group-hover:text-text"}`}>
+                    {rule.title}
+                  </span>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge preset={rule.severity as "critical" | "high" | "medium" | "low"} />
+                    <span className="text-[10px] text-text-muted font-mono uppercase">{rule.language === "kuery" ? "KQL" : rule.language.toUpperCase()}</span>
+                    <span className="text-[10px] text-text-muted capitalize">{rule.status}</span>
+                  </div>
+                </div>
+                {isSelected && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-primary shrink-0">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z" />
+                  </svg>
+                )}
               </div>
-            </div>
-          </button>
-        ))}
+            </button>
+          );
+        })}
       </div>
-
-      {selected && (
-        <div className="bg-primary/5 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-primary shrink-0">
-            <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
-          </svg>
-          <span className="text-sm text-primary font-medium truncate">{selected.title}</span>
-        </div>
-      )}
     </div>
   );
 }

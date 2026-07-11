@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 import { CommandPalette } from "@/components/command-palette";
 import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
+import { NotificationBell } from "@/components/notification-bell";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
 
@@ -96,12 +97,7 @@ export default function DashboardLayout({
                 </svg>
                 <span>⌘K</span>
               </button>
-              <button className="relative p-2 rounded-lg text-text-muted hover:bg-surface-light transition-all">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
-                </svg>
-                <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-danger border-2 border-surface" />
-              </button>
+              <NotificationBell />
               <button
                 onClick={handleLogout}
                 className="p-2 rounded-lg text-text-muted hover:bg-surface-light hover:text-danger transition-all"
