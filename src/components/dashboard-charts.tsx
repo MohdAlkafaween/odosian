@@ -46,7 +46,7 @@ function formatDate(d: unknown) {
 
 function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <div className="bg-surface border border-border rounded-xl overflow-hidden">
+    <div className="bg-surface border border-border rounded-xl overflow-hidden hover:border-border/80 transition-all duration-300 shimmer-hover">
       <div className="px-5 py-4 border-b border-border/60">
         <h2 className="text-sm font-semibold text-text">{title}</h2>
         {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}

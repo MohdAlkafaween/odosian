@@ -50,9 +50,12 @@ interface StatCardConfig {
   icon: React.ReactNode;
 }
 
-function StatCard({ label, value, color, gradient, icon, valueClass }: StatCardConfig & { valueClass?: string }) {
+function StatCard({ label, value, color, gradient, icon, valueClass, delay = 0 }: StatCardConfig & { valueClass?: string; delay?: number }) {
   return (
-    <div className="relative bg-surface border border-border rounded-xl p-5 overflow-hidden group hover:border-border/80 transition-all">
+    <div
+      className="relative bg-surface border border-border rounded-xl p-5 overflow-hidden group hover:border-border/80 hover:-translate-y-0.5 transition-all duration-300 animate-slide-in-scale shimmer-hover"
+      style={{ animationDelay: `${delay}ms` }}
+    >
       <div className="absolute inset-0 opacity-[0.04] group-hover:opacity-[0.07] transition-opacity" style={{ background: gradient }} />
       <div className="absolute top-0 left-0 w-full h-[2px]" style={{ background: gradient }} />
       <div className="relative flex justify-between items-start">
@@ -60,7 +63,7 @@ function StatCard({ label, value, color, gradient, icon, valueClass }: StatCardC
           <div className="text-[11px] text-text-muted font-medium tracking-widest uppercase mb-2">{label}</div>
           <div className={`text-3xl font-extrabold ${valueClass || ""}`} style={valueClass ? {} : { color }}>{value}</div>
         </div>
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: `${color}14` }}>
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300" style={{ background: `${color}14` }}>
           {icon}
         </div>
       </div>
@@ -105,6 +108,7 @@ export default function DashboardPage() {
           value={stats?.totalRules ?? 0}
           color="#4CBDFA"
           gradient="linear-gradient(135deg, #4CBDFA, #38BDF8)"
+          delay={0}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#4CBDFA"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>}
         />
         <StatCard
@@ -112,6 +116,7 @@ export default function DashboardPage() {
           value={stats?.totalAnalyses ?? 0}
           color="#A78BFA"
           gradient="linear-gradient(135deg, #A78BFA, #8B5CF6)"
+          delay={80}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#A78BFA"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z" /></svg>}
         />
         <StatCard
@@ -119,6 +124,7 @@ export default function DashboardPage() {
           value={stats?.avgScore ?? 0}
           color="#FBBF24"
           gradient="linear-gradient(135deg, #FBBF24, #F59E0B)"
+          delay={160}
           valueClass={scoreColor(stats?.avgScore || 0)}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#FBBF24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z" /></svg>}
         />
@@ -127,6 +133,7 @@ export default function DashboardPage() {
           value={stats?.criticalFindings ?? 0}
           color="#FB7185"
           gradient="linear-gradient(135deg, #FB7185, #F43F5E)"
+          delay={240}
           valueClass={(stats?.criticalFindings || 0) > 0 ? "text-danger" : "text-success"}
           icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="#FB7185"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" /></svg>}
         />
@@ -161,7 +168,7 @@ export default function DashboardPage() {
                     </thead>
                     <tbody>
                       {data.recentActivity.map((a) => (
-                        <tr key={a.id} className="hover:bg-surface-light/50 transition-colors cursor-pointer" onClick={() => window.location.href = `/dashboard/analysis/${a.id}`}>
+                        <tr key={a.id} className="hover:bg-surface-light/50 transition-all duration-200 cursor-pointer hover:translate-x-0.5" onClick={() => window.location.href = `/dashboard/analysis/${a.id}`}>
                           <td className="px-3 py-3 text-sm border-b border-border/50">{a.rule?.title || "Raw query"}</td>
                           <td className="px-3 py-3 border-b border-border/50">
                             <Badge preset="info">{TYPE_LABELS[a.analysisType] || a.analysisType}</Badge>
