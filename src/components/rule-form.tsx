@@ -28,6 +28,7 @@ export interface RuleFormData {
   riskScore: number;
   index: string;
   tags: string[];
+  client: string;
   interval: string;
   fromTime: string;
   maxSignals: number;
@@ -86,6 +87,7 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     riskScore: initialData?.riskScore ?? 50,
     index: initialData?.index || "",
     tags: initialData?.tags || [],
+    client: initialData?.client || "",
     interval: initialData?.interval || "5m",
     fromTime: initialData?.fromTime || "now-6m",
     maxSignals: initialData?.maxSignals ?? 100,
@@ -208,6 +210,12 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
             value={form.status}
             onChange={(e) => setForm({ ...form, status: e.target.value })}
             options={STATUSES}
+          />
+          <Input
+            label="Client"
+            value={form.client}
+            onChange={(e) => setForm({ ...form, client: e.target.value })}
+            placeholder="e.g., Acme Corp, Internal, Client-X"
           />
         </CardBody>
       </Card>

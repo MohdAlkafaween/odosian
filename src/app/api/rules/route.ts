@@ -25,6 +25,8 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
     const status = url.searchParams.get("status") || "";
     const ruleType = url.searchParams.get("ruleType") || "";
     const language = url.searchParams.get("language") || "";
+    const client = url.searchParams.get("client") || "";
+    const folderId = url.searchParams.get("folderId");
     const sortBy = url.searchParams.get("sortBy") || "createdAt";
     const sortDir = url.searchParams.get("sortDir") === "asc" ? "asc" : "desc";
 
@@ -40,6 +42,9 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
     if (status) where.status = status;
     if (ruleType) where.ruleType = ruleType;
     if (language) where.language = language;
+    if (client) where.client = client;
+    if (folderId === "none") where.folderId = null;
+    else if (folderId) where.folderId = folderId;
 
     const allowedSorts = ["title", "severity", "createdAt", "updatedAt", "riskScore", "status"];
     const orderField = allowedSorts.includes(sortBy) ? sortBy : "createdAt";

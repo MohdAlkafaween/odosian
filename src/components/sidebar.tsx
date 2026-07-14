@@ -36,6 +36,16 @@ const navItems: NavItem[] = [
     ),
   },
   {
+    label: "Rule Folders",
+    href: "/dashboard/folders",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        <path d="M2 10h20" />
+      </svg>
+    ),
+  },
+  {
     label: "Projects",
     href: "/dashboard/projects",
     icon: (
@@ -52,17 +62,6 @@ const navItems: NavItem[] = [
         <path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93L12 22" />
         <path d="M12 2a4 4 0 0 0-4 4c0 1.95 1.4 3.58 3.25 3.93" />
         <path d="M4 13h4M16 13h4M8 17h8" />
-      </svg>
-    ),
-  },
-  {
-    label: "Templates",
-    href: "/dashboard/templates",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <path d="M14 2v6h6" />
-        <path d="M16 13H8M16 17H8M10 9H8" />
       </svg>
     ),
   },

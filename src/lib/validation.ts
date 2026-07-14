@@ -65,6 +65,7 @@ export const ruleCreateSchema = z.object({
   riskScore: z.number().int().min(0).max(100).default(50),
   index: z.string().max(500).default(""),
   tags: z.array(z.string().max(100)).max(20).default([]),
+  client: z.string().max(100).default("").transform(sanitize),
   interval: z.string().regex(/^\d+[smh]$/, "Invalid interval format").default("5m"),
   fromTime: z.string().max(50).default("now-6m"),
   maxSignals: z.number().int().min(1).max(10000).default(100),

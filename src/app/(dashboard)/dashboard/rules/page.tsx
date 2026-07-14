@@ -21,6 +21,8 @@ interface RuleRow {
   status: string;
   ruleType: string;
   language: string;
+  client: string;
+  tags: string[];
   updatedAt: string;
   author: { id: string; name: string };
   _count: { analyses: number };
@@ -60,6 +62,16 @@ const LANG_OPTIONS = [
   { value: "esql", label: "ES|QL" },
 ];
 
+const CLIENT_COLORS: Record<string, string> = {};
+const PALETTE = ["#4CBDFA", "#A78BFA", "#34D399", "#FBBF24", "#FB7185", "#F97316", "#6ED1CA", "#E879F9"];
+function getClientColor(client: string): string {
+  if (!CLIENT_COLORS[client]) {
+    const idx = Object.keys(CLIENT_COLORS).length % PALETTE.length;
+    CLIENT_COLORS[client] = PALETTE[idx];
+  }
+  return CLIENT_COLORS[client];
+}
+
 export default function RulesListPage() {
   const router = useRouter();
   const { addToast } = useToastStore();
@@ -73,6 +85,8 @@ export default function RulesListPage() {
   const [status, setStatus] = useState("");
   const [ruleType, setRuleType] = useState("");
   const [language, setLanguage] = useState("");
+  const [client, setClient] = useState("");
+  const [clientOptions, setClientOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Clients" }]);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -84,6 +98,20 @@ export default function RulesListPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; failed: number; errors: string[] } | null>(null);
 
+  useEffect(() => {
+    fetch("/api/rules/clients")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.clients) {
+          setClientOptions([
+            { value: "", label: "All Clients" },
+            ...data.clients.map((c: string) => ({ value: c, label: c })),
+          ]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const fetchRules = useCallback(async () => {
     setLoading(true);
     try {
@@ -93,6 +121,7 @@ export default function RulesListPage() {
       if (status) params.set("status", status);
       if (ruleType) params.set("ruleType", ruleType);
       if (language) params.set("language", language);
+      if (client) params.set("client", client);
 
       const res = await fetch(`/api/rules?${params}`);
       const data = await res.json();
@@ -105,7 +134,7 @@ export default function RulesListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, severity, status, ruleType, language, sortBy, sortDir, addToast]);
+  }, [page, search, severity, status, ruleType, language, client, sortBy, sortDir, addToast]);
 
   useEffect(() => {
     fetchRules();
@@ -144,9 +173,34 @@ export default function RulesListPage() {
       header: "Title",
       sortable: true,
       render: (row: RuleRow) => (
-        <Link href={`/dashboard/rules/${row.id}`} className="text-primary hover:underline font-medium">
-          {row.title}
-        </Link>
+        <div className="flex flex-col gap-1">
+          <Link href={`/dashboard/rules/${row.id}`} className="text-primary hover:underline font-medium">
+            {row.title}
+          </Link>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {row.client && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{
+                  background: `${getClientColor(row.client)}15`,
+                  color: getClientColor(row.client),
+                  border: `1px solid ${getClientColor(row.client)}25`,
+                }}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" opacity="0.7"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                {row.client}
+              </span>
+            )}
+            {Array.isArray(row.tags) && row.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded bg-surface-light text-text-muted">
+                {tag}
+              </span>
+            ))}
+            {Array.isArray(row.tags) && row.tags.length > 3 && (
+              <span className="text-[10px] text-text-muted">+{row.tags.length - 3}</span>
+            )}
+          </div>
+        </div>
       ),
     },
     {
@@ -217,6 +271,7 @@ export default function RulesListPage() {
         <div className="flex-1 min-w-[200px] max-w-sm">
           <SearchInput onSearch={handleSearch} placeholder="Search rules..." />
         </div>
+        <Select value={client} onChange={(e) => { setClient(e.target.value); setPage(1); }} options={clientOptions} />
         <Select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }} options={SEVERITY_OPTIONS} />
         <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} options={STATUS_OPTIONS} />
         <Select value={ruleType} onChange={(e) => { setRuleType(e.target.value); setPage(1); }} options={TYPE_OPTIONS} />

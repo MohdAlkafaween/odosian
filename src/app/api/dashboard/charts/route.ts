@@ -12,7 +12,11 @@ export const GET = authenticate(async (_request: AuthenticatedRequest) => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const [recentAnalyses, recentRules, analysisTypeGroups, languageGroups] = await Promise.all([
+    const [
+      recentAnalyses, recentRules, analysisTypeGroups, languageGroups,
+      statusGroups, mitreTacticGroups, mitreTechniqueGroups, totalRules,
+      mitreMappings,
+    ] = await Promise.all([
       prisma.analysis.findMany({
         where: { createdAt: { gte: thirtyDaysAgo } },
         select: { score: true, createdAt: true },
@@ -25,6 +29,13 @@ export const GET = authenticate(async (_request: AuthenticatedRequest) => {
       }),
       prisma.analysis.groupBy({ by: ["analysisType"], _count: true }),
       prisma.rule.groupBy({ by: ["language"], _count: true }),
+      prisma.rule.groupBy({ by: ["status"], _count: true }),
+      prisma.mitreMapping.groupBy({ by: ["tacticId"], _count: true }),
+      prisma.mitreMapping.groupBy({ by: ["techniqueId"], _count: true }),
+      prisma.rule.count(),
+      prisma.mitreMapping.findMany({
+        select: { tacticId: true, tacticName: true, techniqueId: true, techniqueName: true },
+      }),
     ]);
 
     const scoreByDay: Record<string, { total: number; count: number }> = {};
@@ -57,11 +68,40 @@ export const GET = authenticate(async (_request: AuthenticatedRequest) => {
       count: g._count,
     }));
 
+    const ruleStatusCounts: Record<string, number> = {};
+    for (const g of statusGroups) {
+      ruleStatusCounts[g.status] = g._count;
+    }
+
+    const tacticCoverage: Record<string, { name: string; techniques: string[] }> = {};
+    for (const m of mitreMappings) {
+      if (!tacticCoverage[m.tacticId]) {
+        tacticCoverage[m.tacticId] = { name: m.tacticName, techniques: [] };
+      }
+      if (!tacticCoverage[m.tacticId].techniques.includes(m.techniqueId)) {
+        tacticCoverage[m.tacticId].techniques.push(m.techniqueId);
+      }
+    }
+
+    const mitreCoverage = {
+      coveredTactics: Object.keys(tacticCoverage).length,
+      coveredTechniques: mitreTechniqueGroups.length,
+      totalMappings: mitreMappings.length,
+      tactics: Object.entries(tacticCoverage).map(([id, data]) => ({
+        id,
+        name: data.name,
+        techniqueCount: data.techniques.length,
+      })),
+    };
+
     return NextResponse.json({
       scoreTrend,
       ruleTimeline,
       analysisTypes,
       rulesByLanguage,
+      ruleStatusCounts,
+      totalRules,
+      mitreCoverage,
     });
   } catch (e) {
     console.error("Failed to fetch chart data:", e);

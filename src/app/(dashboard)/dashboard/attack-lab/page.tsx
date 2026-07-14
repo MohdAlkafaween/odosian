@@ -8,6 +8,7 @@ import { SearchInput } from "@/components/ui/search-input";
 import { Spinner } from "@/components/ui/loading";
 import { CodeBlock } from "@/components/ui/code-block";
 import { useToastStore } from "@/stores/toast";
+import { useAuthStore } from "@/stores/auth";
 import { MITRE_TACTICS, type MitreTactic, type MitreTechnique } from "@/lib/mitre-data";
 
 interface SimulationResult {
@@ -27,8 +28,36 @@ interface ChatMessage {
   techniqueName?: string;
 }
 
+interface SessionState {
+  messages: ChatMessage[];
+  selectedTechnique: { tech: MitreTechnique; tactic: MitreTactic } | null;
+  selectedTacticId: string | null;
+  expandedResults: number[];
+}
+
+function getSessionKey(userId: string | undefined): string {
+  return `attack-lab-session:${userId || "anon"}`;
+}
+
+function saveSession(userId: string | undefined, state: SessionState) {
+  try {
+    sessionStorage.setItem(getSessionKey(userId), JSON.stringify(state));
+  } catch {}
+}
+
+function loadSession(userId: string | undefined): SessionState | null {
+  try {
+    const raw = sessionStorage.getItem(getSessionKey(userId));
+    if (!raw) return null;
+    return JSON.parse(raw) as SessionState;
+  } catch {
+    return null;
+  }
+}
+
 export default function AttackLabPage() {
   const { addToast } = useToastStore();
+  const { user } = useAuthStore();
   const [search, setSearch] = useState("");
   const [selectedTactic, setSelectedTactic] = useState<MitreTactic | null>(null);
   const [selectedTechnique, setSelectedTechnique] = useState<{ tech: MitreTechnique; tactic: MitreTactic } | null>(null);
@@ -37,6 +66,31 @@ export default function AttackLabPage() {
   const [loading, setLoading] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [expandedResults, setExpandedResults] = useState<Set<number>>(new Set());
+  const restoredRef = useRef(false);
+
+  useEffect(() => {
+    if (restoredRef.current) return;
+    restoredRef.current = true;
+    const saved = loadSession(user?.id);
+    if (!saved) return;
+    setMessages(saved.messages);
+    setSelectedTechnique(saved.selectedTechnique);
+    setExpandedResults(new Set(saved.expandedResults));
+    if (saved.selectedTacticId) {
+      const tactic = MITRE_TACTICS.find(t => t.id === saved.selectedTacticId);
+      if (tactic) setSelectedTactic(tactic);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    saveSession(user?.id, {
+      messages,
+      selectedTechnique,
+      selectedTacticId: selectedTactic?.id || null,
+      expandedResults: Array.from(expandedResults),
+    });
+  }, [messages, selectedTechnique, selectedTactic, expandedResults, user?.id]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -204,7 +258,25 @@ export default function AttackLabPage() {
               </p>
             </div>
             {selectedTechnique && (
-              <Badge preset="info" className="ml-auto">{selectedTechnique.tactic.id}</Badge>
+              <div className="ml-auto flex items-center gap-2">
+                <Badge preset="info">{selectedTechnique.tactic.id}</Badge>
+                <button
+                  onClick={() => {
+                    setMessages([]);
+                    setSelectedTechnique(null);
+                    setSelectedTactic(null);
+                    setExpandedResults(new Set());
+                    sessionStorage.removeItem(getSessionKey(user?.id));
+                  }}
+                  className="text-xs text-text-muted hover:text-danger transition-colors px-2 py-1 rounded hover:bg-surface-light"
+                  title="Reset session"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </button>
+              </div>
             )}
           </div>
 

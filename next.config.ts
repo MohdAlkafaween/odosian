@@ -28,7 +28,6 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            // unsafe-eval required for Monaco Editor
             value: [
               "default-src 'self'",
               "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
@@ -36,6 +35,7 @@ const nextConfig: NextConfig = {
               "connect-src 'self'",
               "img-src 'self' data:",
               "font-src 'self'",
+              "worker-src 'self' blob:",
               "frame-src 'none'",
               "object-src 'none'",
               "base-uri 'self'",

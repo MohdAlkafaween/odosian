@@ -43,6 +43,7 @@ model Rule {
   language           String   @default("kuery")
   index              String   @default("")
   tags               String   @default("[]")
+  client             String   @default("")
   status             String   @default("draft")
   version            Int      @default(1)
   parentRuleId       String?
@@ -58,10 +59,29 @@ model Rule {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
+  folderId      String?
+  folder        RuleFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+
   analyses      Analysis[]
   mitreMappings MitreMapping[]
   projectRules  ProjectRule[]
   customFields  RuleCustomField[]
+}
+
+model RuleFolder {
+  id          String       @id @default(uuid())
+  name        String
+  description String       @default("")
+  icon        String       @default("folder")
+  color       String       @default("#4CBDFA")
+  parentId    String?
+  parent      RuleFolder?  @relation("FolderTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children    RuleFolder[] @relation("FolderTree")
+  sortOrder   Int          @default(0)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  rules Rule[]
 }
 
 model Analysis {

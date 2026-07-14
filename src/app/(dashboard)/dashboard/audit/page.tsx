@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -164,9 +164,8 @@ export default function AuditLogsPage() {
               </thead>
               <tbody>
                 {logs.map((log) => (
-                  <>
+                  <Fragment key={log.id}>
                     <tr
-                      key={log.id}
                       className="border-b border-border last:border-0 hover:bg-surface-light/50 transition-colors"
                     >
                       <td className="px-4 py-3">
@@ -207,7 +206,7 @@ export default function AuditLogsPage() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>
