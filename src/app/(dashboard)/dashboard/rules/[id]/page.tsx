@@ -31,6 +31,7 @@ interface RuleDetail {
   investigationGuide: string;
   falsePositives: string[];
   references: string[];
+  elasticRuleId: string | null;
   authorId: string;
   createdAt: string;
   updatedAt: string;
@@ -38,6 +39,13 @@ interface RuleDetail {
   mitreMappings: { id: string; tacticName: string; techniqueId: string; techniqueName: string; confidence: number }[];
   customFields?: { fieldName: string; fieldValue: string; fieldType: string }[];
   _count: { analyses: number };
+}
+
+interface ElasticConn {
+  id: string;
+  name: string;
+  kibanaUrl: string;
+  isActive: boolean;
 }
 
 export default function RuleDetailPage() {
@@ -51,6 +59,11 @@ export default function RuleDetailPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
+  const [elasticOpen, setElasticOpen] = useState(false);
+  const [elasticConns, setElasticConns] = useState<ElasticConn[]>([]);
+  const [selectedConn, setSelectedConn] = useState("");
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushing, setPushing] = useState(false);
 
   const canEdit = user && rule && (rule.authorId === user.id || user.role === "ADMIN");
 
@@ -111,6 +124,43 @@ export default function RuleDetailPage() {
     }
   };
 
+  const openElasticPush = async () => {
+    try {
+      const res = await fetch("/api/elastic");
+      if (res.ok) {
+        const data = await res.json();
+        const active = (data.connections || []).filter((c: ElasticConn) => c.isActive);
+        setElasticConns(active);
+        if (active.length > 0 && !selectedConn) setSelectedConn(active[0].id);
+      }
+    } catch { /* ignore */ }
+    setElasticOpen(true);
+  };
+
+  const handlePushElastic = async () => {
+    if (!selectedConn) return;
+    setPushing(true);
+    try {
+      const res = await fetch(`/api/rules/${params.id}/push-elastic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId: selectedConn, enabled: pushEnabled }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", `Rule ${data.action} in Elastic Security`);
+        setElasticOpen(false);
+        setRule((prev) => prev ? { ...prev, elasticRuleId: data.elasticRuleId } : prev);
+      } else {
+        addToast("error", data.error || "Failed to push rule");
+      }
+    } catch {
+      addToast("error", "Failed to push rule to Elastic");
+    } finally {
+      setPushing(false);
+    }
+  };
+
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("en-US", {
       month: "short",
@@ -137,6 +187,16 @@ export default function RuleDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openElasticPush}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /><path d="M17 8l4 4-4 4" /></svg>
+              {rule.elasticRuleId ? "Update in Elastic" : "Push to Elastic"}
+            </span>
+          </Button>
           <Button
             variant="outline"
             size="sm"
@@ -343,6 +403,95 @@ export default function RuleDetailPage() {
             </div>
           </CardBody>
         </Card>
+      )}
+
+      {/* Elastic Push Dialog */}
+      {elasticOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface border border-border rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary">
+                    <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-text">Push to Elastic Security</h3>
+                  <p className="text-[11px] text-text-muted">
+                    {rule.elasticRuleId ? "Update existing rule" : "Create new detection rule"}
+                  </p>
+                </div>
+              </div>
+              <button onClick={() => setElasticOpen(false)} className="p-1 text-text-muted hover:text-text transition-colors">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-4">
+              {elasticConns.length === 0 ? (
+                <div className="text-center py-6">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted mx-auto mb-3">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                    <line x1="12" y1="9" x2="12" y2="13" />
+                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                  </svg>
+                  <p className="text-sm text-text-secondary mb-1">No Elastic connections configured</p>
+                  <p className="text-xs text-text-muted">Go to Settings &gt; API &amp; Connections to add one.</p>
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs font-medium text-text-secondary mb-1.5">Connection</label>
+                    <select
+                      value={selectedConn}
+                      onChange={(e) => setSelectedConn(e.target.value)}
+                      className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      {elasticConns.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name} — {c.kibanaUrl}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-surface-light rounded-lg px-4 py-3 border border-border">
+                    <div>
+                      <p className="text-sm text-text font-medium">Enable rule after push</p>
+                      <p className="text-[11px] text-text-muted">If enabled, the rule will start generating alerts immediately</p>
+                    </div>
+                    <button
+                      onClick={() => setPushEnabled(!pushEnabled)}
+                      className={`w-10 h-5 rounded-full transition-colors relative ${pushEnabled ? "bg-primary" : "bg-border"}`}
+                    >
+                      <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${pushEnabled ? "translate-x-5" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+
+                  {rule.elasticRuleId && (
+                    <div className="flex items-center gap-2 bg-primary/5 border border-primary/20 rounded-lg px-3 py-2">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-primary shrink-0">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 16v-4M12 8h.01" />
+                      </svg>
+                      <p className="text-xs text-text-secondary">
+                        This rule is already synced as <span className="font-mono text-primary">{rule.elasticRuleId}</span>. It will be updated.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {elasticConns.length > 0 && (
+              <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setElasticOpen(false)}>Cancel</Button>
+                <Button size="sm" onClick={handlePushElastic} loading={pushing}>
+                  {rule.elasticRuleId ? "Update Rule" : "Push Rule"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <ConfirmDialog

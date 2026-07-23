@@ -290,6 +290,21 @@ model AttackSimulation {
   updatedAt        DateTime        @updatedAt
 }
 
+model ElasticConnection {
+  id          String   @id @default(uuid())
+  name        String   @default("Default Elastic")
+  kibanaUrl   String
+  apiKey      String
+  spaceId     String   @default("default")
+  cloudId     String   @default("")
+  verifySsl   Boolean  @default(true)
+  isActive    Boolean  @default(true)
+  lastTestedAt DateTime?
+  lastStatus  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
 model MitreAttackPrompt {
   id            String   @id @default(uuid())
   techniqueId   String   @unique

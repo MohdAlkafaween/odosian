@@ -11,6 +11,7 @@ import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { useThemeStore } from "@/stores/theme";
 
 export default function DashboardLayout({
   children,
@@ -22,7 +23,10 @@ export default function DashboardLayout({
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const { clearAuth } = useAuthStore();
   const { addToast } = useToastStore();
+  const { initTheme } = useThemeStore();
   const router = useRouter();
+
+  useEffect(() => { initTheme(); }, [initTheme]);
 
   const handleLogout = async () => {
     try {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
+import Link from "next/link";
 
 interface ChartData {
   scoreTrend: Array<{ date: string; avgScore: number; count: number }>;
@@ -18,10 +19,25 @@ interface ChartData {
 }
 
 const CYAN = "#4CBDFA";
-const VIOLET = "#A78BFA";
 const EMERALD = "#34D399";
 const AMBER = "#FBBF24";
-const ROSE = "#FB7185";
+const ROSE = "#EF4444";
+const ORANGE = "#F97316";
+const VIOLET = "#A78BFA";
+
+const STATUS_META: Record<string, { color: string; label: string }> = {
+  production: { color: EMERALD, label: "Production" },
+  reviewed: { color: CYAN, label: "Reviewed" },
+  draft: { color: "#64748B", label: "Draft" },
+  deprecated: { color: "#475569", label: "Deprecated" },
+};
+
+const SEVERITY_META: Record<string, { color: string }> = {
+  critical: { color: ROSE },
+  high: { color: ORANGE },
+  medium: { color: AMBER },
+  low: { color: CYAN },
+};
 
 const TYPE_LABELS: Record<string, string> = {
   analyze: "Analysis",
@@ -30,472 +46,287 @@ const TYPE_LABELS: Record<string, string> = {
   feedback: "Feedback",
 };
 
-const LANG_COLORS: Record<string, string> = {
-  kuery: CYAN,
-  eql: VIOLET,
-  lucene: AMBER,
-  esql: EMERALD,
-};
-
-function AnimateIn({ children, delay = 0, className = "" }: { children: React.ReactNode; delay?: number; className?: string }) {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(t);
-  }, [delay]);
-  return (
-    <div className={className} style={{ opacity: visible ? 1 : 0, transform: visible ? "translateY(0) scale(1)" : "translateY(18px) scale(0.97)", transition: "all 0.8s cubic-bezier(0.16,1,0.3,1)" }}>
-      {children}
-    </div>
-  );
-}
-
-/* ─── #16 Streaming Counter ─── */
-function StreamingCounter({ value, color, label }: { value: number; color: string; label: string }) {
-  const [display, setDisplay] = useState(0);
-  const ref = useRef<number>(0);
-
-  useEffect(() => {
-    const duration = 1800;
-    const start = performance.now();
-    const from = ref.current;
-    const animate = (now: number) => {
-      const t = Math.min((now - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - t, 3);
-      const current = Math.round(from + (value - from) * eased);
-      setDisplay(current);
-      if (t < 1) requestAnimationFrame(animate);
-      else ref.current = value;
-    };
-    requestAnimationFrame(animate);
-  }, [value]);
-
-  const digits = String(display).split("");
-
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <div className="flex items-center gap-[2px]">
-        {digits.map((d, i) => (
-          <span
-            key={i}
-            className="inline-block text-[28px] font-extrabold tabular-nums leading-none"
-            style={{
-              color,
-              textShadow: `0 0 20px ${color}60, 0 0 40px ${color}30`,
-              fontFamily: "'JetBrains Mono', 'Courier New', monospace",
-            }}
-          >
-            {d}
-          </span>
-        ))}
-      </div>
-      <span className="text-[9px] text-[#4E5D6E] uppercase tracking-[2px] font-semibold">{label}</span>
-    </div>
-  );
-}
-
-/* ─── #22 Concentric Activity Rings ─── */
-function ActivityRings({ data }: { data: Array<{ type: string; count: number }> }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 400); return () => clearTimeout(t); }, []);
-
-  const total = data.reduce((s, d) => s + d.count, 0) || 1;
-  const colors = [CYAN, VIOLET, EMERALD, AMBER];
-  const rings = data.slice(0, 4).map((d, i) => ({
-    ...d,
-    pct: Math.round((d.count / total) * 100),
-    color: colors[i],
-    r: 52 - i * 13,
-  }));
-
-  return (
-    <div className="relative flex items-center justify-center" style={{ height: 180 }}>
-      <svg width="140" height="140" viewBox="0 0 140 140">
-        <defs>
-          {rings.map((ring, i) => (
-            <filter key={i} id={`ringGlow${i}`}>
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          ))}
-        </defs>
-        {rings.map((ring, i) => {
-          const circ = 2 * Math.PI * ring.r;
-          const filled = (ring.pct / 100) * circ;
-          return (
-            <g key={i}>
-              <circle cx="70" cy="70" r={ring.r} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="7" />
-              <circle
-                cx="70" cy="70" r={ring.r} fill="none"
-                stroke={ring.color} strokeWidth="7"
-                strokeDasharray={`${circ}`}
-                strokeDashoffset={mounted ? circ - filled : circ}
-                strokeLinecap="round"
-                transform="rotate(-90 70 70)"
-                filter={`url(#ringGlow${i})`}
-                style={{ transition: `stroke-dashoffset 1.5s cubic-bezier(0.16,1,0.3,1) ${0.2 + i * 0.15}s` }}
-              />
-            </g>
-          );
-        })}
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-extrabold text-white tabular-nums leading-none">{total}</div>
-          <div className="text-[9px] text-[#4E5D6E] uppercase tracking-[1.5px] mt-1">Total Ops</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── #28 Shield Coverage Gauge ─── */
-function ShieldGauge({ value, total, color }: { value: number; total: number; color: string; label: string }) {
-  const [mounted, setMounted] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animRef = useRef<number>(0);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 400); return () => clearTimeout(t); }, []);
-
-  const pct = total > 0 ? Math.round((value / total) * 100) : 0;
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const W = 200;
-    const H = 200;
-    canvas.width = W * dpr;
-    canvas.height = H * dpr;
-    ctx.scale(dpr, dpr);
-
-    const shieldPath = (cx: number, cy: number, scale: number) => {
-      const p = new Path2D();
-      const s = scale;
-      p.moveTo(cx, cy - 48 * s);
-      p.lineTo(cx + 40 * s, cy - 32 * s);
-      p.lineTo(cx + 40 * s, cy - 4 * s);
-      p.bezierCurveTo(cx + 40 * s, cy + 20 * s, cx + 24 * s, cy + 40 * s, cx, cy + 52 * s);
-      p.bezierCurveTo(cx - 24 * s, cy + 40 * s, cx - 40 * s, cy + 20 * s, cx - 40 * s, cy - 4 * s);
-      p.lineTo(cx - 40 * s, cy - 32 * s);
-      p.closePath();
-      return p;
-    };
-
-    let startTime = 0;
-    let currentFill = 0;
-
-    const draw = (timestamp: number) => {
-      if (!startTime) startTime = timestamp;
-      const elapsed = timestamp - startTime;
-      const progress = Math.min(elapsed / 1600, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      currentFill = mounted ? eased * pct : 0;
-
-      ctx.clearRect(0, 0, W, H);
-      const cx = W / 2;
-      const cy = H / 2 + 2;
-
-      const outer = shieldPath(cx, cy, 1);
-      ctx.save();
-      ctx.strokeStyle = `${color}18`;
-      ctx.lineWidth = 1;
-      ctx.stroke(outer);
-      ctx.restore();
-
-      ctx.save();
-      ctx.clip(outer);
-      const fillY = cy + 52 - (currentFill / 100) * 100;
-      const grad = ctx.createLinearGradient(0, fillY + 60, 0, fillY - 10);
-      grad.addColorStop(0, `${color}50`);
-      grad.addColorStop(1, `${color}12`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, fillY, W, H);
-
-      const t = elapsed * 0.002;
-      ctx.beginPath();
-      ctx.moveTo(0, fillY);
-      for (let x = 0; x <= W; x += 2) {
-        const y = fillY + Math.sin(x * 0.06 + t) * 2.5 + Math.sin(x * 0.03 + t * 0.7) * 1.5;
-        ctx.lineTo(x, y);
-      }
-      ctx.lineTo(W, H);
-      ctx.lineTo(0, H);
-      ctx.closePath();
-      const waveGrad = ctx.createLinearGradient(0, fillY + 40, 0, fillY - 5);
-      waveGrad.addColorStop(0, `${color}60`);
-      waveGrad.addColorStop(1, `${color}18`);
-      ctx.fillStyle = waveGrad;
-      ctx.fill();
-      ctx.restore();
-
-      const inner = shieldPath(cx, cy, 1);
-      ctx.save();
-      ctx.strokeStyle = `${color}30`;
-      ctx.lineWidth = 2;
-      ctx.stroke(inner);
-      ctx.restore();
-
-      const pulse = 0.5 + Math.sin(elapsed * 0.003) * 0.2;
-      const miniShield = shieldPath(cx, cy - 6, 0.42);
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = pulse;
-      ctx.lineWidth = 1.5;
-      ctx.stroke(miniShield);
-      ctx.globalAlpha = pulse * 0.15;
-      ctx.fillStyle = color;
-      ctx.fill(miniShield);
-      ctx.restore();
-
-      ctx.save();
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = 0.9;
-      ctx.lineWidth = 2.5;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(cx - 7, cy - 4);
-      ctx.lineTo(cx - 1.5, cy + 2.5);
-      ctx.lineTo(cx + 9, cy - 8);
-      ctx.stroke();
-      ctx.restore();
-
-      const glowPulse = 0.08 + Math.sin(elapsed * 0.002) * 0.04;
-      ctx.save();
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 20;
-      ctx.strokeStyle = color;
-      ctx.globalAlpha = glowPulse;
-      ctx.lineWidth = 3;
-      ctx.stroke(outer);
-      ctx.restore();
-
-      animRef.current = requestAnimationFrame(draw);
-    };
-
-    if (mounted) animRef.current = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(animRef.current);
-  }, [mounted, pct, color]);
-
-  return (
-    <div className="flex items-center gap-5">
-      <canvas
-        ref={canvasRef}
-        style={{ width: 120, height: 120 }}
-      />
-      <div className="flex flex-col gap-1.5">
-        <div className="text-[28px] font-extrabold tabular-nums leading-none" style={{ color, fontFamily: "'JetBrains Mono', 'Courier New', monospace", textShadow: `0 0 16px ${color}40` }}>
-          {mounted ? pct : 0}<span className="text-[16px] opacity-60">%</span>
-        </div>
-        <span className="text-[10px] text-[#4E5D6E] uppercase tracking-[2px] font-semibold">Coverage</span>
-        <div className="flex items-center gap-1.5 mt-1">
-          <div className="w-[50px] h-[3px] rounded-full bg-white/5 overflow-hidden">
-            <div className="h-full rounded-full" style={{ width: mounted ? `${pct}%` : "0%", background: color, transition: "width 1.6s cubic-bezier(0.16,1,0.3,1)" }} />
-          </div>
-          <span className="text-[8px] text-[#3A4555] tabular-nums">{pct}/100</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─── #14 Stream Graph (SVG) ─── */
-function StreamGraph({ data }: { data: Array<{ date: string; avgScore: number; count: number }> }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 300); return () => clearTimeout(t); }, []);
-
-  if (data.length < 2) return null;
-
-  const w = 400;
-  const h = 120;
-  const mid = h / 2;
-  const n = data.length;
-  const step = w / (n - 1);
-
-  const buildPath = (values: number[], offset: number, flip: boolean) => {
-    const points = values.map((v, i) => {
-      const x = i * step;
-      const y = flip ? mid + v + offset : mid - v - offset;
-      return { x, y };
-    });
-    let d = `M${points[0].x},${mid}`;
-    d += ` L${points[0].x},${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      const cx = (points[i - 1].x + points[i].x) / 2;
-      d += ` C${cx},${points[i - 1].y} ${cx},${points[i].y} ${points[i].x},${points[i].y}`;
-    }
-    d += ` L${points[points.length - 1].x},${mid}`;
-    d += ` Z`;
-    return d;
-  };
-
-  const layer1 = data.map(d => (d.avgScore / 100) * 25);
-  const layer2 = data.map(d => (d.count / Math.max(...data.map(x => x.count), 1)) * 15);
-  const layer3 = data.map(d => ((100 - d.avgScore) / 100) * 12);
-
-  return (
-    <div className="relative overflow-hidden rounded-xl" style={{ opacity: mounted ? 1 : 0, transition: "opacity 1s ease 0.3s" }}>
-      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="stream1" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={CYAN} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={CYAN} stopOpacity="0.05" />
-          </linearGradient>
-          <linearGradient id="stream2" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={VIOLET} stopOpacity="0.25" />
-            <stop offset="100%" stopColor={VIOLET} stopOpacity="0.05" />
-          </linearGradient>
-          <linearGradient id="stream3" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={EMERALD} stopOpacity="0.2" />
-            <stop offset="100%" stopColor={EMERALD} stopOpacity="0.03" />
-          </linearGradient>
-        </defs>
-        <path d={buildPath(layer1, 0, false)} fill="url(#stream1)" stroke={CYAN} strokeWidth="1" strokeOpacity="0.3" />
-        <path d={buildPath(layer1, 0, true)} fill="url(#stream1)" stroke={CYAN} strokeWidth="1" strokeOpacity="0.3" />
-        <path d={buildPath(layer2, 0, false)} fill="url(#stream2)" stroke={VIOLET} strokeWidth="0.5" strokeOpacity="0.2" />
-        <path d={buildPath(layer2, 0, true)} fill="url(#stream2)" stroke={VIOLET} strokeWidth="0.5" strokeOpacity="0.2" />
-        <path d={buildPath(layer3, 25, false)} fill="url(#stream3)" stroke={EMERALD} strokeWidth="0.5" strokeOpacity="0.15" />
-        <path d={buildPath(layer3, 25, true)} fill="url(#stream3)" stroke={EMERALD} strokeWidth="0.5" strokeOpacity="0.15" />
-        {/* center line */}
-        <line x1="0" y1={mid} x2={w} y2={mid} stroke="rgba(255,255,255,0.06)" strokeWidth="1" strokeDasharray="4 4" />
-      </svg>
-      <div className="absolute bottom-2 right-3 flex items-center gap-3">
-        {[{ c: CYAN, l: "Score" }, { c: VIOLET, l: "Volume" }, { c: EMERALD, l: "Risk" }].map(item => (
-          <div key={item.l} className="flex items-center gap-1.5">
-            <div className="w-[6px] h-[6px] rounded-full" style={{ background: item.c, boxShadow: `0 0 4px ${item.c}50` }} />
-            <span className="text-[9px] text-[#4E5D6E]">{item.l}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/* ─── #2 MITRE ATT&CK Heatmap (real data) ─── */
 const ALL_TACTICS = [
-  { id: "TA0043", short: "Recon" },
-  { id: "TA0042", short: "Resrc Dev" },
-  { id: "TA0001", short: "Access" },
-  { id: "TA0002", short: "Exec" },
-  { id: "TA0003", short: "Persist" },
-  { id: "TA0004", short: "Priv Esc" },
-  { id: "TA0005", short: "Defense" },
-  { id: "TA0006", short: "Cred" },
-  { id: "TA0007", short: "Discovery" },
-  { id: "TA0008", short: "Lateral" },
-  { id: "TA0009", short: "Collect" },
-  { id: "TA0011", short: "C2" },
-  { id: "TA0010", short: "Exfil" },
-  { id: "TA0040", short: "Impact" },
+  { id: "TA0043", name: "Reconnaissance", short: "RECON" },
+  { id: "TA0042", name: "Resource Development", short: "RES DEV" },
+  { id: "TA0001", name: "Initial Access", short: "ACCESS" },
+  { id: "TA0002", name: "Execution", short: "EXEC" },
+  { id: "TA0003", name: "Persistence", short: "PERSIST" },
+  { id: "TA0004", name: "Privilege Escalation", short: "PRIV ESC" },
+  { id: "TA0005", name: "Defense Evasion", short: "DEF EVAS" },
+  { id: "TA0006", name: "Credential Access", short: "CRED" },
+  { id: "TA0007", name: "Discovery", short: "DISCOV" },
+  { id: "TA0008", name: "Lateral Movement", short: "LATERAL" },
+  { id: "TA0009", name: "Collection", short: "COLLECT" },
+  { id: "TA0011", name: "Command and Control", short: "C2" },
+  { id: "TA0010", name: "Exfiltration", short: "EXFIL" },
+  { id: "TA0040", name: "Impact", short: "IMPACT" },
 ];
 
-function MitreHeatmap({ mitreCoverage }: { mitreCoverage: ChartData["mitreCoverage"] }) {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 600); return () => clearTimeout(t); }, []);
+/* ─── Animated number ─── */
+function Odometer({ value, className, style }: { value: number; className?: string; style?: React.CSSProperties }) {
+  const [display, setDisplay] = useState(0);
+  const prev = useRef(0);
+  useEffect(() => {
+    const from = prev.current;
+    const start = performance.now();
+    const dur = 1200;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / dur, 1);
+      const e = 1 - Math.pow(1 - t, 3);
+      setDisplay(Math.round(from + (value - from) * e));
+      if (t < 1) requestAnimationFrame(tick);
+      else prev.current = value;
+    };
+    requestAnimationFrame(tick);
+  }, [value]);
+  return <span className={className} style={style}>{display}</span>;
+}
 
-  if (!mitreCoverage?.tactics) return <div className="text-center py-8 text-[#4E5D6E] text-xs">Loading MITRE data…</div>;
+/* ─── MITRE Kill Chain ─── */
+function MitreKillChain({ mitreCoverage }: { mitreCoverage: ChartData["mitreCoverage"] }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 200); return () => clearTimeout(t); }, []);
+
+  if (!mitreCoverage?.tactics) return null;
 
   const tacticMap = new Map(mitreCoverage.tactics.map(t => [t.id, t]));
-  const coveredCount = mitreCoverage.coveredTactics;
-  const coveragePct = Math.round((coveredCount / ALL_TACTICS.length) * 100);
-
-  const maxTechniques = Math.max(...mitreCoverage.tactics.map(t => t.techniqueCount), 1);
+  const covered = mitreCoverage.coveredTactics;
+  const total = ALL_TACTICS.length;
+  const pct = Math.round((covered / total) * 100);
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-3">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
         <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={CYAN} strokeWidth="1.5" opacity="0.7">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span className="text-xs font-semibold text-white tracking-wide">MITRE ATT&CK KILL CHAIN</span>
+          </div>
+          <div className="h-3 w-px bg-border" />
+          <span className="font-mono text-[11px] tabular-nums" style={{ color: pct >= 50 ? EMERALD : pct >= 25 ? AMBER : ROSE }}>
+            {covered}/{total} TACTICS
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
           {[
-            { c: "rgba(255,255,255,0.03)", l: "No rules", border: true },
-            { c: `${AMBER}35`, l: "1-2 rules" },
-            { c: `${EMERALD}40`, l: "3+ rules" },
+            { color: "rgba(255,255,255,0.06)", label: "No coverage", border: true },
+            { color: `${AMBER}50`, label: "Partial" },
+            { color: `${EMERALD}60`, label: "Covered" },
           ].map(item => (
-            <div key={item.l} className="flex items-center gap-1">
-              <div className="w-[8px] h-[8px] rounded-[2px]" style={{ background: item.c, border: item.border ? "1px solid rgba(255,255,255,0.06)" : "none" }} />
-              <span className="text-[8px] text-[#4E5D6E]">{item.l}</span>
+            <div key={item.label} className="flex items-center gap-1.5">
+              <div className="w-2 h-2 rounded-sm" style={{ background: item.color, border: item.border ? "1px solid rgba(255,255,255,0.1)" : "none" }} />
+              <span className="text-[10px] text-text-muted">{item.label}</span>
             </div>
           ))}
         </div>
-        <span className="text-[11px] font-bold tabular-nums" style={{ color: coveragePct > 50 ? EMERALD : coveragePct > 25 ? AMBER : ROSE }}>
-          {coveredCount}/{ALL_TACTICS.length} tactics covered
-        </span>
       </div>
-      <div className="overflow-x-auto">
-        <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${ALL_TACTICS.length}, minmax(48px, 1fr))` }}>
-          {ALL_TACTICS.map((tactic, tIdx) => {
-            const data = tacticMap.get(tactic.id);
-            const techCount = data?.techniqueCount || 0;
-            const intensity = techCount === 0 ? 0 : techCount >= 3 ? 2 : 1;
 
-            const bgColor = intensity === 0 ? "rgba(255,255,255,0.03)" : intensity === 1 ? `${AMBER}35` : `${EMERALD}40`;
-            const glowShadow = intensity === 2 ? `0 0 8px ${EMERALD}25` : intensity === 1 ? `0 0 6px ${AMBER}15` : "none";
+      {/* Kill chain grid */}
+      <div className="overflow-x-auto -mx-1">
+        <div className="flex gap-[3px] min-w-[700px] px-1">
+          {ALL_TACTICS.map((tactic, idx) => {
+            const data = tacticMap.get(tactic.id);
+            const count = data?.techniqueCount || 0;
+            const intensity = count === 0 ? 0 : count >= 3 ? 2 : 1;
+            const color = intensity === 0 ? "transparent" : intensity === 1 ? AMBER : EMERALD;
+            const bgColor = intensity === 0
+              ? "rgba(255,255,255,0.03)"
+              : intensity === 1
+                ? `${AMBER}20`
+                : `${EMERALD}25`;
 
             return (
-              <div key={tactic.id} className="text-center">
-                <div className="text-[7px] text-[#4E5D6E] uppercase tracking-wider mb-1.5 truncate" title={data?.name || tactic.short}>{tactic.short}</div>
+              <div
+                key={tactic.id}
+                className="flex-1 min-w-0"
+                style={{
+                  opacity: mounted ? 1 : 0,
+                  transform: mounted ? "translateY(0)" : "translateY(8px)",
+                  transition: `all 0.4s ease ${idx * 40}ms`,
+                }}
+              >
+                {/* Tactic label */}
+                <div className="text-center mb-1.5">
+                  <div className="font-mono text-[7px] tracking-widest uppercase truncate" style={{ color: count > 0 ? "#8D99A8" : "#3A4555" }}>
+                    {tactic.short}
+                  </div>
+                </div>
+
+                {/* Cell */}
                 <div
-                  className="h-[32px] rounded-[3px] flex items-center justify-center"
+                  className="relative h-10 rounded flex items-center justify-center"
                   style={{
-                    background: mounted ? bgColor : "rgba(255,255,255,0.03)",
-                    boxShadow: mounted ? glowShadow : "none",
-                    transition: `all 0.5s ease ${tIdx * 50}ms`,
+                    background: bgColor,
+                    borderBottom: count > 0 ? `2px solid ${color}` : "2px solid transparent",
+                    boxShadow: intensity === 2 ? `0 2px 12px ${EMERALD}15` : "none",
                   }}
                 >
-                  {techCount > 0 && mounted && (
-                    <span className="text-[10px] font-bold tabular-nums" style={{ color: intensity >= 2 ? EMERALD : AMBER, opacity: 0.8 }}>
-                      {techCount}
+                  {count > 0 && (
+                    <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color }}>
+                      {count}
                     </span>
                   )}
                 </div>
+
+                {/* Connector arrow */}
+                {idx < ALL_TACTICS.length - 1 && (
+                  <div className="flex justify-center mt-1">
+                    <div className="w-px h-1" style={{ background: "rgba(255,255,255,0.06)" }} />
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Footer stats */}
       {mitreCoverage.totalMappings > 0 && (
-        <div className="flex items-center justify-between mt-3 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
-          <span className="text-[9px] text-[#4E5D6E]">{mitreCoverage.coveredTechniques} techniques mapped across {mitreCoverage.totalMappings} rule-technique links</span>
+        <div className="flex items-center justify-between mt-4 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: CYAN }}>{mitreCoverage.coveredTechniques}</span>
+              <span className="text-[10px] text-text-muted">techniques</span>
+            </div>
+            <div className="w-px h-3 bg-border" />
+            <div className="flex items-center gap-1.5">
+              <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: VIOLET }}>{mitreCoverage.totalMappings}</span>
+              <span className="text-[10px] text-text-muted">rule mappings</span>
+            </div>
+          </div>
+          <Link href="/dashboard/mitre" className="text-[10px] font-semibold text-primary hover:text-primary-hover transition-colors uppercase tracking-wider">
+            Full Matrix →
+          </Link>
         </div>
       )}
     </div>
   );
 }
 
-/* ─── #8 Treemap ─── */
-function Treemap({ data }: { data: Array<{ language: string; count: number }> }) {
+/* ─── Score Sparkline (Canvas) ─── */
+function ScoreSparkline({ data }: { data: Array<{ date: string; avgScore: number; count: number }> }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mounted, setMounted] = useState(false);
-  useEffect(() => { const t = setTimeout(() => setMounted(true), 500); return () => clearTimeout(t); }, []);
+  useEffect(() => { setMounted(true); }, []);
 
-  const total = data.reduce((s, d) => s + d.count, 0) || 1;
-  const sorted = [...data].sort((a, b) => b.count - a.count);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !mounted || data.length < 2) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+
+    const scores = data.map(d => d.avgScore);
+    const min = Math.min(...scores) - 5;
+    const max = Math.max(...scores) + 5;
+    const range = max - min || 1;
+
+    const pad = { top: 4, bottom: 4, left: 0, right: 0 };
+    const graphW = W - pad.left - pad.right;
+    const graphH = H - pad.top - pad.bottom;
+
+    const points = scores.map((s, i) => ({
+      x: pad.left + (i / (scores.length - 1)) * graphW,
+      y: pad.top + (1 - (s - min) / range) * graphH,
+    }));
+
+    // Area fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, `${CYAN}25`);
+    grad.addColorStop(1, `${CYAN}02`);
+
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, H);
+    ctx.lineTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      const cx = (points[i - 1].x + points[i].x) / 2;
+      ctx.bezierCurveTo(cx, points[i - 1].y, cx, points[i].y, points[i].x, points[i].y);
+    }
+    ctx.lineTo(points[points.length - 1].x, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < points.length; i++) {
+      const cx = (points[i - 1].x + points[i].x) / 2;
+      ctx.bezierCurveTo(cx, points[i - 1].y, cx, points[i].y, points[i].x, points[i].y);
+    }
+    ctx.strokeStyle = CYAN;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // End dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 3, 0, Math.PI * 2);
+    ctx.fillStyle = CYAN;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = `${CYAN}20`;
+    ctx.fill();
+  }, [data, mounted]);
+
+  if (data.length < 2) {
+    return <div className="h-full flex items-center justify-center text-[10px] text-text-muted">Insufficient data</div>;
+  }
+
+  return <canvas ref={canvasRef} className="w-full h-full" />;
+}
+
+/* ─── Detection Pipeline ─── */
+function DetectionPipeline({ statusCounts, totalRules }: { statusCounts: Record<string, number>; totalRules: number }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setMounted(true), 300); return () => clearTimeout(t); }, []);
+
+  const stages = ["draft", "reviewed", "production", "deprecated"];
+  const max = Math.max(...stages.map(s => statusCounts[s] || 0), 1);
 
   return (
-    <div
-      className="grid gap-[3px] h-[120px]"
-      style={{
-        gridTemplateColumns: sorted.map(d => `${Math.max(d.count / total, 0.1)}fr`).join(" "),
-      }}
-    >
-      {sorted.map((entry, i) => {
-        const color = LANG_COLORS[entry.language] || "#64748B";
-        const pct = Math.round((entry.count / total) * 100);
+    <div className="space-y-3">
+      {stages.map((status, i) => {
+        const count = statusCounts[status] || 0;
+        const meta = STATUS_META[status];
+        const pct = (count / max) * 100;
+
         return (
-          <div
-            key={entry.language}
-            className="rounded-lg flex flex-col items-center justify-center relative overflow-hidden cursor-default group"
-            style={{
-              background: mounted ? `${color}18` : "rgba(255,255,255,0.03)",
-              border: `1px solid ${mounted ? `${color}25` : "rgba(255,255,255,0.04)"}`,
-              transition: `all 0.6s ease ${i * 100}ms`,
-            }}
-          >
-            <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(ellipse at 50% 0%, ${color}10, transparent 70%)` }} />
-            <span className="text-[18px] font-extrabold tabular-nums relative" style={{ color, textShadow: mounted ? `0 0 16px ${color}40` : "none" }}>{entry.count}</span>
-            <span className="text-[9px] text-[#4E5D6E] uppercase tracking-wider font-semibold relative">{entry.language}</span>
-            <span className="text-[8px] text-[#3A4555] tabular-nums relative mt-0.5">{pct}%</span>
+          <div key={status} className="group">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full" style={{ background: meta.color }} />
+                <span className="text-[11px] text-text-secondary font-medium">{meta.label}</span>
+              </div>
+              <span
+                className="font-mono text-[12px] font-bold tabular-nums"
+                style={{ color: meta.color }}
+              >
+                {mounted ? count : 0}
+              </span>
+            </div>
+            <div className="h-[3px] rounded-full bg-white/[0.04] overflow-hidden">
+              <div
+                className="h-full rounded-full"
+                style={{
+                  width: mounted ? `${pct}%` : "0%",
+                  background: meta.color,
+                  transition: `width 1s cubic-bezier(0.16,1,0.3,1) ${i * 100}ms`,
+                }}
+              />
+            </div>
           </div>
         );
       })}
@@ -503,153 +334,148 @@ function Treemap({ data }: { data: Array<{ language: string; count: number }> })
   );
 }
 
-/* ─── Card wrapper with neon glow (#24) ─── */
-function NeonCard({ children, className = "", delay = 0, glowColor }: { children: React.ReactNode; className?: string; delay?: number; glowColor?: string }) {
-  return (
-    <AnimateIn delay={delay} className={className}>
-      <div
-        className="relative bg-[#111827]/80 rounded-2xl overflow-hidden h-full"
-        style={{
-          border: "1px solid rgba(255,255,255,0.04)",
-          boxShadow: glowColor ? `0 0 30px ${glowColor}06, inset 0 1px 0 rgba(255,255,255,0.03)` : "inset 0 1px 0 rgba(255,255,255,0.03)",
-        }}
-      >
-        {children}
-      </div>
-    </AnimateIn>
-  );
-}
+/* ─── Language Breakdown ─── */
+function LanguageBreakdown({ data, total }: { data: Array<{ language: string; count: number }>; total: number }) {
+  const sorted = [...data].sort((a, b) => b.count - a.count);
+  const langColors: Record<string, string> = { kuery: CYAN, eql: VIOLET, lucene: AMBER, esql: EMERALD };
 
-function CardHeader({ title, badge, rightContent }: { title: string; badge?: string; rightContent?: React.ReactNode }) {
   return (
-    <div className="px-5 pt-5 pb-3 flex items-center justify-between">
-      <div className="flex items-center gap-2.5">
-        <span className="text-[13px] font-semibold text-white">{title}</span>
-        {badge && (
-          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#4CBDFA]/10 text-[#4CBDFA] tabular-nums">{badge}</span>
-        )}
-      </div>
-      {rightContent}
+    <div className="space-y-2.5">
+      {sorted.map((entry) => {
+        const color = langColors[entry.language] || "#64748B";
+        const pct = total > 0 ? Math.round((entry.count / total) * 100) : 0;
+        return (
+          <div key={entry.language} className="flex items-center gap-3">
+            <span className="font-mono text-[10px] uppercase tracking-wider w-12 text-text-muted">{entry.language}</span>
+            <div className="flex-1 h-[3px] rounded-full bg-white/[0.04] overflow-hidden">
+              <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color, transition: "width 1s ease" }} />
+            </div>
+            <span className="font-mono text-[11px] font-bold tabular-nums w-6 text-right" style={{ color }}>{entry.count}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-/* ─── Main Component ─── */
+/* ─── Panel ─── */
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-surface/80 rounded-xl border border-border overflow-hidden ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+function PanelHeader({ title, mono, right }: { title: string; mono?: boolean; right?: React.ReactNode }) {
+  return (
+    <div className="px-4 py-3 flex items-center justify-between border-b border-border">
+      <span className={`text-[11px] font-semibold uppercase tracking-[1.5px] ${mono ? "font-mono" : ""} text-text-secondary`}>{title}</span>
+      {right}
+    </div>
+  );
+}
+
+
+/* ─── Main Export ─── */
 export function DashboardCharts() {
   const [data, setData] = useState<ChartData | null>(null);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     fetch("/api/dashboard/charts")
       .then((r) => r.json())
-      .then((d) => { setData(d); setTimeout(() => setMounted(true), 200); })
+      .then(setData)
       .catch(() => {});
   }, []);
 
   if (!data) return null;
 
-  const hasScoreData = data.scoreTrend.length > 0;
-  const hasTypeData = data.analysisTypes.length > 0;
-  const hasLangData = data.rulesByLanguage.length > 0;
-
-  if (!hasScoreData && !hasTypeData && !hasLangData) return null;
-
-  const totalAnalyses = data.analysisTypes.reduce((sum, d) => sum + d.count, 0);
-  const totalRules = data.totalRules || data.rulesByLanguage.reduce((sum, d) => sum + d.count, 0);
-  const latestScore = hasScoreData ? data.scoreTrend[data.scoreTrend.length - 1]?.avgScore ?? 0 : 0;
+  const totalRules = data.totalRules;
+  const totalAnalyses = data.analysisTypes.reduce((s, d) => s + d.count, 0);
+  const latestScore = data.scoreTrend.length > 0 ? data.scoreTrend[data.scoreTrend.length - 1].avgScore : 0;
   const productionRules = data.ruleStatusCounts?.production || 0;
-  const mitreCoverage = data.mitreCoverage;
+  const mitrePct = data.mitreCoverage ? Math.round((data.mitreCoverage.coveredTactics / ALL_TACTICS.length) * 100) : 0;
 
   return (
     <div className="space-y-4">
 
-      {/* Row 1 — Streaming Counters + Activity Rings */}
+      {/* ─── Row 1: MITRE Kill Chain (hero) ─── */}
+      <Panel>
+        <div className="px-5 py-5">
+          <MitreKillChain mitreCoverage={data.mitreCoverage} />
+        </div>
+      </Panel>
+
+      {/* ─── Row 2: Score trend + Pipeline + Languages ─── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Streaming Counters */}
-        <NeonCard delay={60} className="lg:col-span-8" glowColor={CYAN}>
-          <CardHeader title="Live Metrics" rightContent={
-            <div className="flex items-center gap-1.5">
-              <div className="w-[6px] h-[6px] rounded-full" style={{ background: EMERALD, boxShadow: `0 0 8px ${EMERALD}80`, animation: "pulse 2s ease-in-out infinite" }} />
-              <span className="text-[9px] text-[#4E5D6E] uppercase tracking-wider">Live</span>
+        {/* Score trend */}
+        <Panel className="lg:col-span-5">
+          <PanelHeader title="Detection Score" mono right={
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold tabular-nums" style={{ color: latestScore >= 70 ? EMERALD : latestScore >= 50 ? AMBER : ROSE }}>
+                {latestScore}
+              </span>
+              <span className="text-[10px] text-text-muted">/100</span>
             </div>
           } />
-          <div className="px-5 pb-5">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 py-3">
-              <StreamingCounter value={totalRules} color={CYAN} label="Rules" />
-              <StreamingCounter value={totalAnalyses} color={VIOLET} label="Analyses" />
-              <StreamingCounter value={latestScore} color={latestScore >= 60 ? EMERALD : AMBER} label="Avg Score" />
-              <StreamingCounter value={productionRules} color={EMERALD} label="Production" />
+          <div className="px-4 py-3 h-[100px]">
+            <ScoreSparkline data={data.scoreTrend} />
+          </div>
+          <div className="px-4 pb-3 flex items-center justify-between">
+            <span className="text-[10px] text-text-muted">30-day trend</span>
+            <div className="flex items-center gap-1">
+              {data.scoreTrend.length >= 2 && (() => {
+                const first = data.scoreTrend[0].avgScore;
+                const last = data.scoreTrend[data.scoreTrend.length - 1].avgScore;
+                const delta = last - first;
+                const color = delta >= 0 ? EMERALD : ROSE;
+                return (
+                  <>
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill={color}>
+                      {delta >= 0
+                        ? <path d="M5 2L8 6H2L5 2Z" />
+                        : <path d="M5 8L2 4H8L5 8Z" />
+                      }
+                    </svg>
+                    <span className="font-mono text-[10px] font-bold tabular-nums" style={{ color }}>
+                      {delta >= 0 ? "+" : ""}{delta}
+                    </span>
+                  </>
+                );
+              })()}
             </div>
           </div>
-        </NeonCard>
+        </Panel>
 
-        {/* Activity Rings */}
-        {hasTypeData && (
-          <NeonCard delay={160} className="lg:col-span-4" glowColor={VIOLET}>
-            <CardHeader title="AI Operations" />
-            <div className="px-5 pb-4">
-              <ActivityRings data={data.analysisTypes} />
-              <div className="flex justify-center gap-3 mt-2">
-                {data.analysisTypes.slice(0, 4).map((d, i) => (
-                  <div key={d.type} className="flex items-center gap-1.5">
-                    <div className="w-[6px] h-[6px] rounded-full" style={{ background: [CYAN, VIOLET, EMERALD, AMBER][i] }} />
-                    <span className="text-[9px] text-[#4E5D6E]">{TYPE_LABELS[d.type] || d.type}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </NeonCard>
-        )}
-      </div>
-
-      {/* Row 2 — Stream Graph + Treemap */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        {/* Stream Graph */}
-        {hasScoreData && (
-          <NeonCard delay={260} className="lg:col-span-7" glowColor={CYAN}>
-            <CardHeader title="Analysis Trend" badge="30d" rightContent={
-              <span className="text-[10px] text-[#4E5D6E] uppercase tracking-wider">Score &middot; Volume</span>
-            } />
-            <div className="px-4 pb-4">
-              <StreamGraph data={data.scoreTrend} />
-            </div>
-          </NeonCard>
-        )}
-
-        {/* Treemap + Waffle */}
-        {hasLangData && (
-          <NeonCard delay={360} className="lg:col-span-5" glowColor={VIOLET}>
-            <CardHeader title="Rule Arsenal" badge={`${totalRules} rules`} />
-            <div className="px-5 pb-5 space-y-5">
-              <Treemap data={data.rulesByLanguage} />
-              <ShieldGauge
-                value={mitreCoverage?.coveredTactics || 0}
-                total={ALL_TACTICS.length}
-                color={mitreCoverage && mitreCoverage.coveredTactics >= ALL_TACTICS.length / 2 ? EMERALD : AMBER}
-                label="MITRE Tactic Coverage"
-              />
-            </div>
-          </NeonCard>
-        )}
-      </div>
-
-      {/* Row 3 — MITRE Heatmap */}
-      <NeonCard delay={460} glowColor={ROSE}>
-        <CardHeader title="MITRE ATT&CK Coverage" rightContent={
-          <div className="flex items-center gap-2">
-            <div className="w-[6px] h-[6px] rounded-full" style={{ background: CYAN, boxShadow: `0 0 6px ${CYAN}60`, animation: "pulse 2s ease-in-out infinite" }} />
-            <span className="text-[10px] text-[#4E5D6E] uppercase tracking-wider">{ALL_TACTICS.length} Tactics</span>
+        {/* Detection Pipeline */}
+        <Panel className="lg:col-span-4">
+          <PanelHeader title="Detection Pipeline" mono right={
+            <span className="font-mono text-[10px] tabular-nums text-text-muted">{totalRules} total</span>
+          } />
+          <div className="px-4 py-4">
+            <DetectionPipeline statusCounts={data.ruleStatusCounts} totalRules={totalRules} />
           </div>
-        } />
-        <div className="px-5 pb-5">
-          {mitreCoverage ? (
-            <MitreHeatmap mitreCoverage={mitreCoverage} />
-          ) : (
-            <div className="text-center py-8 text-[#4E5D6E] text-xs">No MITRE mappings yet</div>
-          )}
-        </div>
-      </NeonCard>
+        </Panel>
 
+        {/* Language + Operations */}
+        <Panel className="lg:col-span-3">
+          <PanelHeader title="Languages" mono />
+          <div className="px-4 py-4">
+            <LanguageBreakdown data={data.rulesByLanguage} total={totalRules} />
+          </div>
+          <div className="border-t border-border px-4 py-3">
+            <div className="text-[10px] text-text-muted uppercase tracking-wider mb-2 font-semibold">Operations</div>
+            <div className="space-y-1.5">
+              {data.analysisTypes.map((d) => (
+                <div key={d.type} className="flex items-center justify-between">
+                  <span className="text-[11px] text-text-secondary">{TYPE_LABELS[d.type] || d.type}</span>
+                  <span className="font-mono text-[11px] font-bold tabular-nums text-text-secondary">{d.count}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </div>
     </div>
   );
 }
