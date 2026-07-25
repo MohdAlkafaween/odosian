@@ -13,7 +13,7 @@ const ROUTE_LABELS: Record<string, string> = {
   audit: "Audit Logs",
   users: "Users",
   settings: "Settings",
-  projects: "Projects",
+  projects: "Shield Categories",
   profile: "Profile",
   new: "Create",
   edit: "Edit",
@@ -25,7 +25,10 @@ export function Breadcrumb() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
 
-  if (segments.length <= 1) return null;
+  // Always render a (possibly empty) nav — an actually-null return collapses
+  // this to zero DOM children, which breaks `justify-between` in the topbar:
+  // with only one flex item left, it snaps to flex-start instead of flex-end.
+  if (segments.length <= 1) return <nav />;
 
   const crumbs = segments.map((segment, i) => {
     const href = "/" + segments.slice(0, i + 1).join("/");

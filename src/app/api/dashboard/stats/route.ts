@@ -5,9 +5,10 @@ import { errorResponse } from "@/lib/errors";
 
 export const GET = authenticate(async (_request: AuthenticatedRequest) => {
   try {
-    const [totalRules, totalAnalyses, avgResult, severityGroups, recentAnalyses] =
+    const [totalRules, coveredRules, totalAnalyses, avgResult, severityGroups, recentAnalyses] =
       await Promise.all([
         prisma.rule.count(),
+        prisma.rule.count({ where: { covered: true } }),
         prisma.analysis.count(),
         prisma.analysis.aggregate({ _avg: { score: true } }),
         prisma.rule.groupBy({ by: ["severity"], _count: true }),
@@ -39,6 +40,7 @@ export const GET = authenticate(async (_request: AuthenticatedRequest) => {
     return NextResponse.json({
       stats: {
         totalRules,
+        coveredRules,
         totalAnalyses,
         avgScore: Math.round(avgResult._avg.score || 0),
         criticalFindings: criticalAnalyses.length,

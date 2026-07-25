@@ -171,6 +171,7 @@ export default function SettingsPage() {
   const [editingElastic, setEditingElastic] = useState<Partial<ElasticConnection & { apiKey?: string }> | null>(null);
   const [savingElastic, setSavingElastic] = useState(false);
   const [testingElastic, setTestingElastic] = useState(false);
+  const [pullingElastic, setPullingElastic] = useState(false);
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -357,6 +358,28 @@ export default function SettingsPage() {
       }
     } catch { addToast("error", "Connection test failed"); }
     finally { setTestingElastic(false); }
+  };
+
+  const pullElasticRules = async (connectionId: string) => {
+    setPullingElastic(true);
+    try {
+      const res = await fetch("/api/elastic/pull-rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast(
+          "success",
+          `Pulled ${data.total} rules: ${data.imported} imported, ${data.updated} updated${data.failed ? `, ${data.failed} failed` : ""}`
+        );
+        fetchSettings();
+      } else {
+        addToast("error", data.error || "Failed to pull rules");
+      }
+    } catch { addToast("error", "Failed to pull rules"); }
+    finally { setPullingElastic(false); }
   };
 
   const testProvider = async (providerId: string) => {
@@ -707,6 +730,9 @@ export default function SettingsPage() {
                         <div className="flex gap-2">
                           <Button variant="ghost" size="sm" onClick={() => testElastic(c.id)} loading={testingElastic}>
                             Test
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => pullElasticRules(c.id)} loading={pullingElastic}>
+                            Pull Rules
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => setEditingElastic({ ...c })}>Edit</Button>
                           <Button variant="danger" size="sm" onClick={() => deleteElastic(c.id)}>

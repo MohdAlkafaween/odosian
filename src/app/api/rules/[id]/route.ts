@@ -5,6 +5,7 @@ import { ruleUpdateSchema, validateRequest } from "@/lib/validation";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
+import { syncRuleCategoryProject } from "@/lib/category-projects";
 
 function parseJsonFields(rule: Record<string, unknown>) {
   return {
@@ -91,6 +92,10 @@ export const PUT = requireRole("ANALYST", "ADMIN")(async (request: Authenticated
           create: { ruleId: id, fieldName: cf.fieldName, fieldValue: cf.fieldValue, fieldType: cf.fieldType || "text" },
         });
       }
+    }
+
+    if (rule.category) {
+      await syncRuleCategoryProject(rule.id, rule.category, request.user.id);
     }
 
     logAudit({

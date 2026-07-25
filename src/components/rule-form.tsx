@@ -7,6 +7,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { MonacoQueryEditor } from "@/components/monaco-query-editor";
+import { RULE_CATEGORIES } from "@/lib/rule-category";
+
+const CATEGORY_OPTIONS = [
+  { value: "", label: "Uncategorized" },
+  ...RULE_CATEGORIES.map((c) => ({ value: c, label: c })),
+];
 
 interface CustomFieldDef {
   id: string;
@@ -29,6 +35,7 @@ export interface RuleFormData {
   index: string;
   tags: string[];
   client: string;
+  category: string;
   interval: string;
   fromTime: string;
   maxSignals: number;
@@ -88,6 +95,7 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     index: initialData?.index || "",
     tags: initialData?.tags || [],
     client: initialData?.client || "",
+    category: initialData?.category || "",
     interval: initialData?.interval || "5m",
     fromTime: initialData?.fromTime || "now-6m",
     maxSignals: initialData?.maxSignals ?? 100,
@@ -98,6 +106,7 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
   });
 
   const [tagInput, setTagInput] = useState("");
+  const [clientSuggestions, setClientSuggestions] = useState<string[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>(() => {
@@ -109,6 +118,13 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     }
     return values;
   });
+
+  useEffect(() => {
+    fetch("/api/rules/clients")
+      .then((r) => r.json())
+      .then((data) => setClientSuggestions(data.clients || []))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/custom-fields")
@@ -216,6 +232,18 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
             value={form.client}
             onChange={(e) => setForm({ ...form, client: e.target.value })}
             placeholder="e.g., Acme Corp, Internal, Client-X"
+            list="client-suggestions"
+          />
+          <datalist id="client-suggestions">
+            {clientSuggestions.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
+          <Select
+            label="Category"
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+            options={CATEGORY_OPTIONS}
           />
         </CardBody>
       </Card>

@@ -22,6 +22,8 @@ interface RuleRow {
   ruleType: string;
   language: string;
   client: string;
+  category: string;
+  covered: boolean;
   tags: string[];
   updatedAt: string;
   author: { id: string; name: string };
@@ -45,6 +47,12 @@ const STATUS_OPTIONS = [
   { value: "deprecated", label: "Deprecated" },
 ];
 
+const COVERED_OPTIONS = [
+  { value: "", label: "All Coverage" },
+  { value: "true", label: "Covered" },
+  { value: "false", label: "Not Covered" },
+];
+
 const TYPE_OPTIONS = [
   { value: "", label: "All Types" },
   { value: "query", label: "Query" },
@@ -63,6 +71,7 @@ const LANG_OPTIONS = [
 ];
 
 const CLIENT_COLORS: Record<string, string> = {};
+const CATEGORY_COLORS: Record<string, string> = {};
 const PALETTE = ["#4CBDFA", "#A78BFA", "#34D399", "#FBBF24", "#FB7185", "#F97316", "#6ED1CA", "#E879F9"];
 function getClientColor(client: string): string {
   if (!CLIENT_COLORS[client]) {
@@ -70,6 +79,13 @@ function getClientColor(client: string): string {
     CLIENT_COLORS[client] = PALETTE[idx];
   }
   return CLIENT_COLORS[client];
+}
+function getCategoryColor(category: string): string {
+  if (!CATEGORY_COLORS[category]) {
+    const idx = Object.keys(CATEGORY_COLORS).length % PALETTE.length;
+    CATEGORY_COLORS[category] = PALETTE[idx];
+  }
+  return CATEGORY_COLORS[category];
 }
 
 export default function RulesListPage() {
@@ -87,6 +103,14 @@ export default function RulesListPage() {
   const [language, setLanguage] = useState("");
   const [client, setClient] = useState("");
   const [clientOptions, setClientOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Clients" }]);
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [newClientTag, setNewClientTag] = useState("");
+  const [addingClient, setAddingClient] = useState(false);
+  const [category, setCategory] = useState("");
+  const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Categories" }]);
+  const [covered, setCovered] = useState("");
+  const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
+  const [togglingCovered, setTogglingCovered] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -98,14 +122,58 @@ export default function RulesListPage() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; failed: number; errors: string[] } | null>(null);
 
-  useEffect(() => {
-    fetch("/api/rules/clients")
+  const fetchClientOptions = useCallback(() => {
+    return fetch("/api/rules/clients")
       .then((r) => r.json())
       .then((data) => {
         if (data.clients) {
           setClientOptions([
             { value: "", label: "All Clients" },
             ...data.clients.map((c: string) => ({ value: c, label: c })),
+          ]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchClientOptions();
+  }, [fetchClientOptions]);
+
+  const addClientTag = async () => {
+    const name = newClientTag.trim();
+    if (!name) return;
+    setAddingClient(true);
+    try {
+      const res = await fetch("/api/rules/clients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (res.ok) {
+        addToast("success", `Client tag "${name}" added`);
+        setNewClientTag("");
+        setShowAddClient(false);
+        fetchClientOptions();
+      } else {
+        const err = await res.json();
+        addToast("error", err.error || "Failed to add client tag");
+      }
+    } catch {
+      addToast("error", "Failed to add client tag");
+    } finally {
+      setAddingClient(false);
+    }
+  };
+
+  useEffect(() => {
+    fetch("/api/rules/categories")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.categories) {
+          setCategoryOptions([
+            { value: "", label: "All Categories" },
+            ...data.categories.map((c: string) => ({ value: c, label: c })),
           ]);
         }
       })
@@ -122,19 +190,46 @@ export default function RulesListPage() {
       if (ruleType) params.set("ruleType", ruleType);
       if (language) params.set("language", language);
       if (client) params.set("client", client);
+      if (category) params.set("category", category);
+      if (covered) params.set("covered", covered);
 
       const res = await fetch(`/api/rules?${params}`);
       const data = await res.json();
       if (res.ok) {
         setRules(data.rules);
         setTotalPages(data.pagination.totalPages);
+        if (data.coverage) setCoverage(data.coverage);
       }
     } catch {
       addToast("error", "Failed to load rules");
     } finally {
       setLoading(false);
     }
-  }, [page, search, severity, status, ruleType, language, client, sortBy, sortDir, addToast]);
+  }, [page, search, severity, status, ruleType, language, client, category, covered, sortBy, sortDir, addToast]);
+
+  const toggleCovered = async (rule: RuleRow) => {
+    setTogglingCovered((prev) => new Set(prev).add(rule.id));
+    const nextCovered = !rule.covered;
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: nextCovered } : r)));
+    try {
+      const res = await fetch(`/api/rules/${rule.id}/covered`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ covered: nextCovered }),
+      });
+      if (!res.ok) {
+        setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: rule.covered } : r)));
+        addToast("error", "Failed to update coverage");
+      } else {
+        setCoverage((prev) => prev ? { ...prev, covered: prev.covered + (nextCovered ? 1 : -1) } : prev);
+      }
+    } catch {
+      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: rule.covered } : r)));
+      addToast("error", "Failed to update coverage");
+    } finally {
+      setTogglingCovered((prev) => { const next = new Set(prev); next.delete(rule.id); return next; });
+    }
+  };
 
   useEffect(() => {
     fetchRules();
@@ -169,6 +264,26 @@ export default function RulesListPage() {
 
   const columns = [
     {
+      key: "covered",
+      header: "",
+      render: (row: RuleRow) => (
+        <button
+          onClick={(e) => { e.stopPropagation(); toggleCovered(row); }}
+          disabled={togglingCovered.has(row.id)}
+          title={row.covered ? "Covered — click to unmark" : "Mark as covered"}
+          className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all shrink-0 ${
+            row.covered
+              ? "bg-success/20 border-success text-success"
+              : "bg-transparent border-border text-transparent hover:border-success/50 hover:text-success/30"
+          } ${togglingCovered.has(row.id) ? "opacity-50" : ""}`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+            <path d="M20 6L9 17l-5-5" />
+          </svg>
+        </button>
+      ),
+    },
+    {
       key: "title",
       header: "Title",
       sortable: true,
@@ -189,6 +304,19 @@ export default function RulesListPage() {
               >
                 <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" opacity="0.7"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                 {row.client}
+              </span>
+            )}
+            {row.category && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{
+                  background: `${getCategoryColor(row.category)}15`,
+                  color: getCategoryColor(row.category),
+                  border: `1px solid ${getCategoryColor(row.category)}25`,
+                }}
+              >
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" opacity="0.7"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                {row.category}
               </span>
             )}
             {Array.isArray(row.tags) && row.tags.slice(0, 3).map((tag) => (
@@ -238,6 +366,20 @@ export default function RulesListPage() {
           <p className="text-sm text-text-muted mt-1">
             Manage your Elastic SIEM detection rules
           </p>
+          {coverage && coverage.total > 0 && (
+            <div className="flex items-center gap-2 mt-2">
+              <div className="w-40 h-1.5 rounded-full bg-surface-light overflow-hidden">
+                <div
+                  className="h-full bg-success rounded-full transition-all"
+                  style={{ width: `${Math.round((coverage.covered / coverage.total) * 100)}%` }}
+                />
+              </div>
+              <span className="text-xs text-text-muted">
+                <span className="text-success font-semibold">{coverage.covered}</span> of {coverage.total} covered
+                {" "}({Math.round((coverage.covered / coverage.total) * 100)}%)
+              </span>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}>Import</Button>
@@ -271,7 +413,31 @@ export default function RulesListPage() {
         <div className="flex-1 min-w-[200px] max-w-sm">
           <SearchInput onSearch={handleSearch} placeholder="Search rules..." />
         </div>
+        <Select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} options={categoryOptions} />
+        <Select value={covered} onChange={(e) => { setCovered(e.target.value); setPage(1); }} options={COVERED_OPTIONS} />
         <Select value={client} onChange={(e) => { setClient(e.target.value); setPage(1); }} options={clientOptions} />
+        {showAddClient ? (
+          <div className="flex items-center gap-1">
+            <input
+              autoFocus
+              type="text"
+              value={newClientTag}
+              onChange={(e) => setNewClientTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") addClientTag();
+                if (e.key === "Escape") { setShowAddClient(false); setNewClientTag(""); }
+              }}
+              placeholder="New client tag"
+              className="px-3 py-1.5 bg-bg border border-border rounded-lg text-text text-sm w-36 focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+            <Button size="sm" onClick={addClientTag} loading={addingClient} disabled={!newClientTag.trim()}>Add</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowAddClient(false); setNewClientTag(""); }}>Cancel</Button>
+          </div>
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => setShowAddClient(true)} title="Add a custom client tag">
+            + Client Tag
+          </Button>
+        )}
         <Select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }} options={SEVERITY_OPTIONS} />
         <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} options={STATUS_OPTIONS} />
         <Select value={ruleType} onChange={(e) => { setRuleType(e.target.value); setPage(1); }} options={TYPE_OPTIONS} />

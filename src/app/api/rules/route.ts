@@ -5,6 +5,7 @@ import { ruleCreateSchema, validateRequest } from "@/lib/validation";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
+import { syncRuleCategoryProject } from "@/lib/category-projects";
 
 function parseJsonFields(rule: Record<string, unknown>) {
   return {
@@ -26,7 +27,8 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
     const ruleType = url.searchParams.get("ruleType") || "";
     const language = url.searchParams.get("language") || "";
     const client = url.searchParams.get("client") || "";
-    const folderId = url.searchParams.get("folderId");
+    const category = url.searchParams.get("category") || "";
+    const covered = url.searchParams.get("covered") || "";
     const sortBy = url.searchParams.get("sortBy") || "createdAt";
     const sortDir = url.searchParams.get("sortDir") === "asc" ? "asc" : "desc";
 
@@ -43,13 +45,17 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
     if (ruleType) where.ruleType = ruleType;
     if (language) where.language = language;
     if (client) where.client = client;
-    if (folderId === "none") where.folderId = null;
-    else if (folderId) where.folderId = folderId;
+    if (category) where.category = category;
+    if (covered === "true") where.covered = true;
+    else if (covered === "false") where.covered = false;
 
     const allowedSorts = ["title", "severity", "createdAt", "updatedAt", "riskScore", "status"];
     const orderField = allowedSorts.includes(sortBy) ? sortBy : "createdAt";
 
-    const [rules, total] = await Promise.all([
+    const { covered: _omitCovered, ...whereWithoutCovered } = where;
+    void _omitCovered;
+
+    const [rules, total, totalInScope, coveredInScope] = await Promise.all([
       prisma.rule.findMany({
         where,
         skip: (page - 1) * limit,
@@ -61,6 +67,8 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
         },
       }),
       prisma.rule.count({ where }),
+      prisma.rule.count({ where: whereWithoutCovered }),
+      prisma.rule.count({ where: { ...whereWithoutCovered, covered: true } }),
     ]);
 
     return NextResponse.json({
@@ -70,6 +78,10 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
         limit,
         total,
         totalPages: Math.ceil(total / limit),
+      },
+      coverage: {
+        covered: coveredInScope,
+        total: totalInScope,
       },
     });
   } catch (e) {
@@ -97,6 +109,10 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
         author: { select: { id: true, name: true } },
       },
     });
+
+    if (rule.category) {
+      await syncRuleCategoryProject(rule.id, rule.category, request.user.id);
+    }
 
     logAudit({
       userId: request.user.id,

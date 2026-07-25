@@ -10,6 +10,7 @@ import { useAuthStore } from "@/stores/auth";
 interface DashboardStats {
   stats: {
     totalRules: number;
+    coveredRules: number;
     totalAnalyses: number;
     avgScore: number;
     criticalFindings: number;
@@ -121,7 +122,9 @@ export default function DashboardPage() {
             label: "ACTIVE RULES",
             value: stats?.totalRules ?? 0,
             color: "#4CBDFA",
-            sub: null,
+            sub: stats?.totalRules
+              ? `${Math.round(((stats.coveredRules ?? 0) / stats.totalRules) * 100)}% COVERED`
+              : null,
           },
           {
             label: "ANALYSES",

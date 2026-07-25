@@ -47,7 +47,7 @@ export default function ProjectsPage() {
         setTotalPages(data.pagination.totalPages);
       }
     } catch {
-      addToast("error", "Failed to load projects");
+      addToast("error", "Failed to load categories");
     } finally {
       setLoading(false);
     }
@@ -67,17 +67,17 @@ export default function ProjectsPage() {
         body: JSON.stringify({ name: formName, description: formDesc }),
       });
       if (res.ok) {
-        addToast("success", "Project created");
+        addToast("success", "Category created");
         setFormName("");
         setFormDesc("");
         setShowForm(false);
         fetchProjects();
       } else {
         const err = await res.json();
-        addToast("error", err.error || "Failed to create project");
+        addToast("error", err.error || "Failed to create category");
       }
     } catch {
-      addToast("error", "Failed to create project");
+      addToast("error", "Failed to create category");
     } finally {
       setCreating(false);
     }
@@ -87,11 +87,11 @@ export default function ProjectsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[28px] font-extrabold text-text">Shield Projects</h1>
-          <p className="text-sm text-text-muted mt-1">Organize detection rules into projects</p>
+          <h1 className="text-[28px] font-extrabold text-text">Shield Categories</h1>
+          <p className="text-sm text-text-muted mt-1">Rules are auto-organized by category as they&apos;re pulled in from Elastic</p>
         </div>
         <Button onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ New Project"}
+          {showForm ? "Cancel" : "+ New Category"}
         </Button>
       </div>
 
@@ -100,13 +100,13 @@ export default function ProjectsPage() {
           <CardBody>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-text mb-1">Project Name</label>
+                <label className="block text-sm font-medium text-text mb-1">Category Name</label>
                 <input
                   type="text"
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  placeholder="My Detection Project"
+                  placeholder="e.g., Custom Category"
                 />
               </div>
               <div>
@@ -120,7 +120,7 @@ export default function ProjectsPage() {
                 />
               </div>
               <Button onClick={handleCreate} disabled={creating || !formName.trim()}>
-                {creating ? "Creating..." : "Create Project"}
+                {creating ? "Creating..." : "Create Category"}
               </Button>
             </div>
           </CardBody>
@@ -128,16 +128,16 @@ export default function ProjectsPage() {
       )}
 
       <div className="mb-4 max-w-sm">
-        <SearchInput onSearch={(q) => { setSearch(q); setPage(1); }} placeholder="Search projects..." />
+        <SearchInput onSearch={(q) => { setSearch(q); setPage(1); }} placeholder="Search categories..." />
       </div>
 
       {loading ? (
         <PageLoader />
       ) : projects.length === 0 ? (
         <EmptyState
-          title="No projects yet"
-          description="Create a project to organize your detection rules"
-          actionLabel="New Project"
+          title="No categories yet"
+          description="Categories are created automatically as rules are pulled in, or add one manually"
+          actionLabel="New Category"
           onAction={() => setShowForm(true)}
         />
       ) : (

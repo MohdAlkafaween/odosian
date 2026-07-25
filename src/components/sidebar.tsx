@@ -36,17 +36,7 @@ const navItems: NavItem[] = [
     ),
   },
   {
-    label: "Rule Folders",
-    href: "/dashboard/folders",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-        <path d="M2 10h20" />
-      </svg>
-    ),
-  },
-  {
-    label: "Projects",
+    label: "Shield Categories",
     href: "/dashboard/projects",
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

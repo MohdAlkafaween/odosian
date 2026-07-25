@@ -24,6 +24,8 @@ interface RuleDetail {
   index: string;
   tags: string[];
   status: string;
+  covered: boolean;
+  coveredAt: string | null;
   version: number;
   interval: string;
   fromTime: string;
@@ -64,6 +66,7 @@ export default function RuleDetailPage() {
   const [selectedConn, setSelectedConn] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [togglingCovered, setTogglingCovered] = useState(false);
 
   const canEdit = user && rule && (rule.authorId === user.id || user.role === "ADMIN");
 
@@ -86,6 +89,30 @@ export default function RuleDetailPage() {
     };
     fetchRule();
   }, [params.id, router, addToast]);
+
+  const handleToggleCovered = async () => {
+    if (!rule) return;
+    setTogglingCovered(true);
+    const nextCovered = !rule.covered;
+    try {
+      const res = await fetch(`/api/rules/${rule.id}/covered`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ covered: nextCovered }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setRule({ ...rule, covered: data.covered, coveredAt: data.coveredAt });
+        addToast("success", nextCovered ? "Marked as covered" : "Marked as not covered");
+      } else {
+        addToast("error", "Failed to update coverage");
+      }
+    } catch {
+      addToast("error", "Failed to update coverage");
+    } finally {
+      setTogglingCovered(false);
+    }
+  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -187,6 +214,17 @@ export default function RuleDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant={rule.covered ? "success" : "outline"}
+            size="sm"
+            onClick={handleToggleCovered}
+            loading={togglingCovered}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>
+              {rule.covered ? "Covered" : "Mark as Covered"}
+            </span>
+          </Button>
           <Button
             variant="outline"
             size="sm"

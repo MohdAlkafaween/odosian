@@ -306,6 +306,26 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<AnalyzeResult | null>(null);
   const [mode, setMode] = useState<"rule" | "query">(defaultRuleId ? "rule" : "rule");
+  const [enhancing, setEnhancing] = useState(false);
+  const [enhanceResult, setEnhanceResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
+
+  const handleEnhanceDirect = useCallback(async () => {
+    if (!ruleId) return;
+    setEnhancing(true);
+    setEnhanceResult(null);
+    try {
+      const res = await fetch("/api/analysis/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId }),
+      });
+      const data = await res.json();
+      if (!res.ok) { addToast("error", data.error || "Enhancement failed"); return; }
+      setEnhanceResult(data.analysis);
+      addToast("success", "Rule enhanced");
+    } catch { addToast("error", "Enhancement failed"); }
+    finally { setEnhancing(false); }
+  }, [ruleId, addToast]);
 
   const handleAnalyze = useCallback(async () => {
     if (mode === "rule" && !ruleId) { addToast("error", "Select a rule"); return; }
@@ -313,6 +333,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
 
     setLoading(true);
     setResult(null);
+    setEnhanceResult(null);
     try {
       const body = mode === "rule" ? { ruleId } : { query: rawQuery, language };
       const res = await fetch("/api/analysis/analyze", {
@@ -360,7 +381,37 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
         </div>
       )}
 
-      {result && <AnalyzeResults result={result} />}
+      {result && (
+        <>
+          <AnalyzeResults result={result} />
+
+          {mode === "rule" && ruleId && !enhanceResult && (
+            <Button onClick={handleEnhanceDirect} loading={enhancing} variant="success" className="w-full gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+              {enhancing ? "Enhancing..." : "Enhance This Rule Now"}
+            </Button>
+          )}
+
+          {enhancing && (
+            <div className="flex flex-col items-center gap-3 py-12">
+              <Spinner size="lg" />
+              <p className="text-text-secondary text-sm">AI is enhancing the rule using these findings...</p>
+            </div>
+          )}
+
+          {enhanceResult && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-text">Enhancement Results</h2>
+                <Button size="sm" variant="outline" onClick={handleEnhanceDirect} loading={enhancing}>
+                  Re-enhance
+                </Button>
+              </div>
+              <EnhanceResults result={enhanceResult} />
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -483,6 +534,63 @@ function AnalyzeResults({ result }: { result: AnalyzeResult }) {
   );
 }
 
+function EnhanceResults({ result }: { result: EnhanceResult & { inputQuery?: string } }) {
+  return (
+    <div className="space-y-6">
+      {result.enhancedTitle && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-text">Enhanced Metadata</h3></CardHeader>
+          <CardBody className="space-y-2">
+            <p className="text-sm"><span className="text-text-muted">Title:</span> <span className="text-text">{result.enhancedTitle}</span></p>
+            {result.enhancedDescription && <p className="text-sm"><span className="text-text-muted">Description:</span> <span className="text-text">{result.enhancedDescription}</span></p>}
+            <div className="flex gap-4">
+              <p className="text-sm"><span className="text-text-muted">Severity:</span> <Badge preset={result.newSeverity as "low" | "medium" | "high" | "critical"} /></p>
+              <p className="text-sm"><span className="text-text-muted">Risk Score:</span> <span className="text-text font-bold">{result.newRiskScore}</span></p>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {result.inputQuery && (
+          <div>
+            <h3 className="text-sm font-medium text-text-secondary mb-2">Original Query</h3>
+            <CodeBlock code={result.inputQuery} language="kuery" />
+          </div>
+        )}
+        <div>
+          <h3 className="text-sm font-medium text-success mb-2">Enhanced Query</h3>
+          <CodeBlock code={result.enhancedQuery} language="kuery" />
+        </div>
+      </div>
+
+      {result.changelog?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-text">Changelog</h3></CardHeader>
+          <CardBody className="space-y-2">
+            {result.changelog.map((c, i) => (
+              <div key={i} className="flex gap-2 text-sm">
+                <span className="text-primary shrink-0">•</span>
+                <div>
+                  <span className="text-text font-medium">{c.change}</span>
+                  <span className="text-text-muted ml-2">— {c.reason}</span>
+                </div>
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
+
+      {result.investigationGuide && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-text">Investigation Guide</h3></CardHeader>
+          <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.investigationGuide}</p></CardBody>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 function EnhanceTab({ rules, addToast }: {
   rules: RuleOption[];
   addToast: ToastFn;
@@ -547,60 +655,7 @@ function EnhanceTab({ rules, addToast }: {
         </div>
       )}
 
-      {result && (
-        <div className="space-y-6">
-          {result.enhancedTitle && (
-            <Card>
-              <CardHeader><h3 className="font-semibold text-text">Enhanced Metadata</h3></CardHeader>
-              <CardBody className="space-y-2">
-                <p className="text-sm"><span className="text-text-muted">Title:</span> <span className="text-text">{result.enhancedTitle}</span></p>
-                {result.enhancedDescription && <p className="text-sm"><span className="text-text-muted">Description:</span> <span className="text-text">{result.enhancedDescription}</span></p>}
-                <div className="flex gap-4">
-                  <p className="text-sm"><span className="text-text-muted">Severity:</span> <Badge preset={result.newSeverity as "low" | "medium" | "high" | "critical"} /></p>
-                  <p className="text-sm"><span className="text-text-muted">Risk Score:</span> <span className="text-text font-bold">{result.newRiskScore}</span></p>
-                </div>
-              </CardBody>
-            </Card>
-          )}
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {result.inputQuery && (
-              <div>
-                <h3 className="text-sm font-medium text-text-secondary mb-2">Original Query</h3>
-                <CodeBlock code={result.inputQuery} language="kuery" />
-              </div>
-            )}
-            <div>
-              <h3 className="text-sm font-medium text-success mb-2">Enhanced Query</h3>
-              <CodeBlock code={result.enhancedQuery} language="kuery" />
-            </div>
-          </div>
-
-          {result.changelog?.length > 0 && (
-            <Card>
-              <CardHeader><h3 className="font-semibold text-text">Changelog</h3></CardHeader>
-              <CardBody className="space-y-2">
-                {result.changelog.map((c, i) => (
-                  <div key={i} className="flex gap-2 text-sm">
-                    <span className="text-primary shrink-0">•</span>
-                    <div>
-                      <span className="text-text font-medium">{c.change}</span>
-                      <span className="text-text-muted ml-2">— {c.reason}</span>
-                    </div>
-                  </div>
-                ))}
-              </CardBody>
-            </Card>
-          )}
-
-          {result.investigationGuide && (
-            <Card>
-              <CardHeader><h3 className="font-semibold text-text">Investigation Guide</h3></CardHeader>
-              <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.investigationGuide}</p></CardBody>
-            </Card>
-          )}
-        </div>
-      )}
+      {result && <EnhanceResults result={result} />}
     </div>
   );
 }

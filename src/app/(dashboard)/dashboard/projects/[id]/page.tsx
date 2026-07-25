@@ -60,11 +60,11 @@ export default function ProjectDetailPage() {
       if (res.ok) {
         setProject(data.project);
       } else {
-        addToast("error", "Project not found");
+        addToast("error", "Category not found");
         router.push("/dashboard/projects");
       }
     } catch {
-      addToast("error", "Failed to load project");
+      addToast("error", "Failed to load category");
     } finally {
       setLoading(false);
     }
@@ -89,7 +89,7 @@ export default function ProjectDetailPage() {
       body: JSON.stringify({ name: editName, description: editDesc }),
     });
     if (res.ok) {
-      addToast("success", "Project updated");
+      addToast("success", "Category updated");
       setEditing(false);
       fetchProject();
     } else {
@@ -103,10 +103,10 @@ export default function ProjectDetailPage() {
     setDeleting(true);
     const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
     if (res.ok) {
-      addToast("success", "Project deleted");
+      addToast("success", "Category deleted");
       router.push("/dashboard/projects");
     } else {
-      addToast("error", "Failed to delete project");
+      addToast("error", "Failed to delete category");
     }
     setDeleting(false);
   };
@@ -166,7 +166,7 @@ export default function ProjectDetailPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <button onClick={() => router.push("/dashboard/projects")} className="text-sm text-text-muted hover:text-text mb-2 block">
-            &larr; Back to Projects
+            &larr; Back to Shield Categories
           </button>
           {editing ? (
             <div className="space-y-2">
@@ -277,7 +277,7 @@ export default function ProjectDetailPage() {
         open={deleteConfirm}
         onClose={() => setDeleteConfirm(false)}
         onConfirm={handleDelete}
-        title="Delete Project"
+        title="Delete Category"
         message={`Are you sure you want to delete "${project.name}"? Rules will not be deleted.`}
         confirmLabel="Delete"
         variant="danger"

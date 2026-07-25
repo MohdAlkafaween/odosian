@@ -9,11 +9,10 @@ metadata:
 spec:
   tls:
     - hosts:
-        - odosian.example.com
+        - odosian.local
       secretName: odosian-tls
   rules:
-    - host: odosian.example.com
-      http:
+    - http:
         paths:
           - path: /
             pathType: Prefix
