@@ -54,6 +54,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
             falsePositives: JSON.stringify(result.falsePositives || []),
             references: JSON.stringify(result.references || []),
             status: "draft",
+            source: "generated",
             authorId: request.user.id,
           },
         });

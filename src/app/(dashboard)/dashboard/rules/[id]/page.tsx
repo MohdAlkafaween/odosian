@@ -71,6 +71,13 @@ interface RuleDetail {
   falsePositives: string[];
   references: string[];
   elasticRuleId: string | null;
+  license: string;
+  timestampOverride: string;
+  timelineId: string;
+  timelineTitle: string;
+  relatedIntegrations: { package: string; version: string }[];
+  requiredFields: { name: string; type: string }[];
+  investigationFields: string[];
   authorId: string;
   createdAt: string;
   updatedAt: string;
@@ -228,7 +235,12 @@ export default function RuleDetailPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        addToast("success", `Rule ${data.action} in Elastic Security`);
+        addToast(
+          "success",
+          data.duplicated
+            ? `Pushed as a new rule and disabled the original${data.oldRuleDisabled ? "" : " (couldn't disable the original — check it in Kibana)"}`
+            : `Rule ${data.action} in Elastic Security`
+        );
         setElasticOpen(false);
         setRule((prev) => prev ? { ...prev, elasticRuleId: data.elasticRuleId } : prev);
       } else {
@@ -471,6 +483,56 @@ export default function RuleDetailPage() {
                   </li>
                 ))}
               </ul>
+            </CardBody>
+          </Card>
+        )}
+
+        {(rule.license || rule.timestampOverride || rule.timelineId || rule.timelineTitle
+          || rule.relatedIntegrations.length > 0 || rule.requiredFields.length > 0 || rule.investigationFields.length > 0) && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-lg font-semibold text-text">Elastic Metadata</h2>
+            </CardHeader>
+            <CardBody className="space-y-3">
+              {rule.license && (
+                <p className="text-sm"><span className="text-text-muted">License:</span> <span className="text-text">{rule.license}</span></p>
+              )}
+              {rule.timestampOverride && (
+                <p className="text-sm"><span className="text-text-muted">Timestamp Override:</span> <span className="text-text">{rule.timestampOverride}</span></p>
+              )}
+              {(rule.timelineId || rule.timelineTitle) && (
+                <p className="text-sm"><span className="text-text-muted">Timeline Template:</span> <span className="text-text">{rule.timelineTitle || rule.timelineId}</span></p>
+              )}
+              {rule.investigationFields.length > 0 && (
+                <div>
+                  <p className="text-sm text-text-muted mb-1">Custom Highlighted Fields:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rule.investigationFields.map((f, i) => (
+                      <span key={i} className="text-xs font-mono px-2 py-0.5 rounded bg-surface-light border border-border text-text-secondary">{f}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {rule.relatedIntegrations.length > 0 && (
+                <div>
+                  <p className="text-sm text-text-muted mb-1">Related Integrations:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rule.relatedIntegrations.map((ri, i) => (
+                      <span key={i} className="text-xs font-mono px-2 py-0.5 rounded bg-surface-light border border-border text-text-secondary">{ri.package}@{ri.version}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {rule.requiredFields.length > 0 && (
+                <div>
+                  <p className="text-sm text-text-muted mb-1">Required Fields:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {rule.requiredFields.map((rf, i) => (
+                      <span key={i} className="text-xs font-mono px-2 py-0.5 rounded bg-surface-light border border-border text-text-secondary">{rf.name} ({rf.type})</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardBody>
           </Card>
         )}

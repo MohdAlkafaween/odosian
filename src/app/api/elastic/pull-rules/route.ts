@@ -44,6 +44,13 @@ interface ElasticRule {
   references?: string[];
   note?: string;
   threat?: ElasticThreat[];
+  license?: string;
+  timestamp_override?: string;
+  related_integrations?: Array<{ package: string; version: string }>;
+  required_fields?: Array<{ name: string; type: string }>;
+  timeline_id?: string;
+  timeline_title?: string;
+  investigation_fields?: { field_names: string[] };
 }
 
 interface FindRulesResponse {
@@ -188,6 +195,16 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
             references: JSON.stringify(er.references || []),
             investigationGuide: er.note || "",
             elasticRuleId: er.rule_id,
+            license: er.license || "",
+            timestampOverride: er.timestamp_override || "",
+            relatedIntegrations: JSON.stringify(er.related_integrations || []),
+            requiredFields: JSON.stringify(
+              (er.required_fields || []).map((f) => ({ name: f.name, type: f.type }))
+            ),
+            timelineId: er.timeline_id || "",
+            timelineTitle: er.timeline_title || "",
+            investigationFields: JSON.stringify(er.investigation_fields?.field_names || []),
+            source: "elastic",
           };
 
           let ruleId: string;

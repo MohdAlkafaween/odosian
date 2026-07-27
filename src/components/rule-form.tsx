@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,6 +8,14 @@ import { Select } from "@/components/ui/select";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { MonacoQueryEditor } from "@/components/monaco-query-editor";
 import { RULE_CATEGORIES } from "@/lib/rule-category";
+import { deriveRequiredFields } from "@/lib/required-fields";
+
+interface FleetIntegration {
+  name: string;
+  title: string;
+  version: string;
+  status: string;
+}
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "Uncategorized" },
@@ -43,6 +51,13 @@ export interface RuleFormData {
   references: string[];
   falsePositives: string[];
   status: string;
+  license: string;
+  timestampOverride: string;
+  timelineId: string;
+  timelineTitle: string;
+  relatedIntegrations: Array<{ package: string; version: string }>;
+  requiredFields: Array<{ name: string; type: string }>;
+  investigationFields: string[];
   customFields?: Array<{ fieldName: string; fieldValue: string; fieldType: string }>;
 }
 
@@ -103,6 +118,13 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     references: initialData?.references || [],
     falsePositives: initialData?.falsePositives || [],
     status: initialData?.status || "draft",
+    license: initialData?.license || "",
+    timestampOverride: initialData?.timestampOverride || "",
+    timelineId: initialData?.timelineId || "",
+    timelineTitle: initialData?.timelineTitle || "",
+    relatedIntegrations: initialData?.relatedIntegrations || [],
+    requiredFields: initialData?.requiredFields || [],
+    investigationFields: initialData?.investigationFields || [],
   });
 
   const [tagInput, setTagInput] = useState("");
@@ -185,18 +207,48 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     setForm({ ...form, tags: form.tags.filter((t) => t !== tag) });
   };
 
-  const addListItem = (field: "references" | "falsePositives") => {
+  const addListItem = (field: "references" | "falsePositives" | "investigationFields") => {
     setForm({ ...form, [field]: [...form[field], ""] });
   };
 
-  const updateListItem = (field: "references" | "falsePositives", index: number, value: string) => {
+  const updateListItem = (field: "references" | "falsePositives" | "investigationFields", index: number, value: string) => {
     const updated = [...form[field]];
     updated[index] = value;
     setForm({ ...form, [field]: updated });
   };
 
-  const removeListItem = (field: "references" | "falsePositives", index: number) => {
+  const removeListItem = (field: "references" | "falsePositives" | "investigationFields", index: number) => {
     setForm({ ...form, [field]: form[field].filter((_, i) => i !== index) });
+  };
+
+  // Required Fields aren't user-editable — they're exactly what the query
+  // references, computed live so what's shown always matches reality. The
+  // server recomputes this independently on save regardless of what's
+  // submitted, so this is display-only.
+  const liveRequiredFields = useMemo(() => deriveRequiredFields(form.query), [form.query]);
+
+  const [integrationSearch, setIntegrationSearch] = useState("");
+  const [availableIntegrations, setAvailableIntegrations] = useState<FleetIntegration[]>([]);
+  const [integrationsError, setIntegrationsError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/elastic/integrations")
+      .then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (ok) setAvailableIntegrations(data.integrations || []);
+        else setIntegrationsError(data.error || "Couldn't load integrations from Elastic");
+      })
+      .catch(() => setIntegrationsError("Couldn't load integrations from Elastic"));
+  }, []);
+
+  const toggleIntegration = (integration: FleetIntegration) => {
+    const exists = form.relatedIntegrations.some((ri) => ri.package === integration.name);
+    setForm({
+      ...form,
+      relatedIntegrations: exists
+        ? form.relatedIntegrations.filter((ri) => ri.package !== integration.name)
+        : [...form.relatedIntegrations, { package: integration.name, version: `^${integration.version}` }],
+    });
   };
 
   return (
@@ -395,6 +447,143 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
             placeholder="Steps for analysts to follow when this rule triggers..."
             rows={6}
           />
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <h3 className="text-lg font-semibold text-text">Elastic Metadata</h3>
+        </CardHeader>
+        <CardBody className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input
+              label="License"
+              value={form.license}
+              onChange={(e) => setForm({ ...form, license: e.target.value })}
+              placeholder="e.g., Elastic License v2"
+            />
+            <Input
+              label="Timestamp Override"
+              value={form.timestampOverride}
+              onChange={(e) => setForm({ ...form, timestampOverride: e.target.value })}
+              placeholder="e.g., event.ingested"
+            />
+            <Input
+              label="Timeline ID"
+              value={form.timelineId}
+              onChange={(e) => setForm({ ...form, timelineId: e.target.value })}
+            />
+            <Input
+              label="Timeline Title"
+              value={form.timelineTitle}
+              onChange={(e) => setForm({ ...form, timelineTitle: e.target.value })}
+            />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-text">Custom Highlighted Fields</label>
+              <Button type="button" variant="ghost" size="sm" onClick={() => addListItem("investigationFields")}>
+                + Add Field
+              </Button>
+            </div>
+            <div className="space-y-2">
+              {form.investigationFields.map((f, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    value={f}
+                    onChange={(e) => updateListItem("investigationFields", i, e.target.value)}
+                    placeholder="e.g., user.name, host.name"
+                  />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => removeListItem("investigationFields", i)} className="text-danger shrink-0">
+                    Remove
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Related Integrations
+              <span className="text-xs text-text-muted font-normal ml-2">
+                Real Fleet packages from your connected Elastic instance — not free text
+              </span>
+            </label>
+            {integrationsError && (
+              <p className="text-xs text-danger mb-2">{integrationsError}</p>
+            )}
+            {form.relatedIntegrations.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {form.relatedIntegrations.map((ri) => (
+                  <span key={ri.package} className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono bg-primary/10 text-primary border border-primary/20">
+                    {ri.package}
+                    <button
+                      type="button"
+                      onClick={() => setForm({ ...form, relatedIntegrations: form.relatedIntegrations.filter((x) => x.package !== ri.package) })}
+                      className="text-primary/60 hover:text-primary"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <Input
+              value={integrationSearch}
+              onChange={(e) => setIntegrationSearch(e.target.value)}
+              placeholder="Search integrations (e.g., aws, windows, defend)..."
+            />
+            {integrationSearch && (
+              <div className="mt-2 max-h-48 overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                {availableIntegrations
+                  .filter((i) =>
+                    i.title.toLowerCase().includes(integrationSearch.toLowerCase())
+                    || i.name.toLowerCase().includes(integrationSearch.toLowerCase())
+                  )
+                  .slice(0, 25)
+                  .map((integration) => {
+                    const selected = form.relatedIntegrations.some((ri) => ri.package === integration.name);
+                    return (
+                      <button
+                        type="button"
+                        key={integration.name}
+                        onClick={() => toggleIntegration(integration)}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-light transition-colors ${selected ? "bg-primary/5" : ""}`}
+                      >
+                        <span className="text-text">{integration.title}</span>
+                        <span className="flex items-center gap-2">
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded ${integration.status === "installed" ? "bg-success/10 text-success" : "bg-surface-light text-text-muted"}`}>
+                            {integration.status === "installed" ? "Installed" : "Not installed"}
+                          </span>
+                          {selected && <span className="text-primary text-xs">✓</span>}
+                        </span>
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-text mb-2">
+              Required Fields
+              <span className="text-xs text-text-muted font-normal ml-2">
+                Computed automatically from the query above — not editable
+              </span>
+            </label>
+            {liveRequiredFields.length > 0 ? (
+              <div className="flex flex-wrap gap-1.5">
+                {liveRequiredFields.map((rf) => (
+                  <span key={rf.name} className="text-xs font-mono px-2 py-0.5 rounded bg-surface-light border border-border text-text-secondary">
+                    {rf.name} <span className="text-text-muted">({rf.type})</span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-text-muted">No ECS-style fields detected in the query yet.</p>
+            )}
+          </div>
         </CardBody>
       </Card>
 

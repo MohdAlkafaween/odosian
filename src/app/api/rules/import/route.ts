@@ -5,6 +5,7 @@ import { ruleCreateSchema } from "@/lib/validation";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
+import { deriveRequiredFields } from "@/lib/required-fields";
 
 const MAX_IMPORT = 100;
 
@@ -50,7 +51,8 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
         continue;
       }
 
-      const { tags, falsePositives, references, ...rest } = result.data;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { tags, falsePositives, references, relatedIntegrations, requiredFields: _requiredFields, investigationFields, ...rest } = result.data;
 
       try {
         await prisma.rule.create({
@@ -59,6 +61,9 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
             tags: JSON.stringify(tags),
             falsePositives: JSON.stringify(falsePositives),
             references: JSON.stringify(references),
+            relatedIntegrations: JSON.stringify(relatedIntegrations),
+            requiredFields: JSON.stringify(deriveRequiredFields(result.data.query)),
+            investigationFields: JSON.stringify(investigationFields),
             authorId: request.user.id,
           },
         });

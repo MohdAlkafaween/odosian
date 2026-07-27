@@ -74,6 +74,19 @@ export const ruleCreateSchema = z.object({
   references: z.array(z.string().max(500)).max(20).default([]),
   falsePositives: z.array(z.string().max(500)).max(20).default([]),
   status: z.enum(["draft", "reviewed", "production", "deprecated"]).default("draft"),
+  license: z.string().max(200).default("").transform(sanitize),
+  timestampOverride: z.string().max(200).default(""),
+  relatedIntegrations: z
+    .array(z.object({ package: z.string().max(100), version: z.string().max(50) }))
+    .max(20)
+    .default([]),
+  requiredFields: z
+    .array(z.object({ name: z.string().max(200), type: z.string().max(50) }))
+    .max(50)
+    .default([]),
+  timelineId: z.string().max(200).default(""),
+  timelineTitle: z.string().max(200).default(""),
+  investigationFields: z.array(z.string().max(200)).max(50).default([]),
 });
 
 export const ruleUpdateSchema = ruleCreateSchema.partial();

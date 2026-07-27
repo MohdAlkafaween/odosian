@@ -6,6 +6,7 @@ import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
 import { syncRuleCategoryProject } from "@/lib/category-projects";
+import { deriveRequiredFields } from "@/lib/required-fields";
 
 function parseJsonFields(rule: Record<string, unknown>) {
   return {
@@ -13,6 +14,9 @@ function parseJsonFields(rule: Record<string, unknown>) {
     tags: JSON.parse((rule.tags as string) || "[]"),
     falsePositives: JSON.parse((rule.falsePositives as string) || "[]"),
     references: JSON.parse((rule.references as string) || "[]"),
+    relatedIntegrations: JSON.parse((rule.relatedIntegrations as string) || "[]"),
+    requiredFields: JSON.parse((rule.requiredFields as string) || "[]"),
+    investigationFields: JSON.parse((rule.investigationFields as string) || "[]"),
   };
 }
 
@@ -95,7 +99,8 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
     const validated = await validateRequest(ruleCreateSchema, request);
     if ("error" in validated) return validated.error;
 
-    const { tags, falsePositives, references, ...rest } = validated.data;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { tags, falsePositives, references, relatedIntegrations, requiredFields: _requiredFields, investigationFields, ...rest } = validated.data;
 
     const rule = await prisma.rule.create({
       data: {
@@ -103,6 +108,11 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
         tags: JSON.stringify(tags),
         falsePositives: JSON.stringify(falsePositives),
         references: JSON.stringify(references),
+        relatedIntegrations: JSON.stringify(relatedIntegrations),
+        // Never trust a client-supplied value here — always the real, current
+        // fields the query actually references.
+        requiredFields: JSON.stringify(deriveRequiredFields(validated.data.query)),
+        investigationFields: JSON.stringify(investigationFields),
         authorId: request.user.id,
       },
       include: {

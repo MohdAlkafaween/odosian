@@ -114,7 +114,7 @@ export default function DashboardLayout({
           </header>
 
           <main className="flex-1 overflow-auto bg-bg hex-bg-subtle">
-            <div className="p-6 pt-20 md:pt-6 max-w-[1400px] mx-auto animate-fade-in-up">
+            <div className="p-6 pt-20 md:pt-6 max-w-[1400px] mx-auto animate-fade-in">
               <div className="md:hidden mb-4">
                 <Breadcrumb />
               </div>

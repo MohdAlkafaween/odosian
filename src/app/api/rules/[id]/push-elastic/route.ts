@@ -4,6 +4,7 @@ import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { elasticFetch } from "@/lib/elastic-fetch";
+import { deriveRequiredFields } from "@/lib/required-fields";
 
 interface ElasticRulePayload {
   rule_id?: string;
@@ -26,6 +27,12 @@ interface ElasticRulePayload {
   references: string[];
   investigation_fields?: { field_names: string[] };
   note?: string;
+  license?: string;
+  timestamp_override?: string;
+  related_integrations?: Array<{ package: string; version: string }>;
+  required_fields?: Array<{ name: string; type: string }>;
+  timeline_id?: string;
+  timeline_title?: string;
 }
 
 interface ElasticThreat {
@@ -106,11 +113,44 @@ function buildThreatArray(
   return Array.from(tacticMap.values());
 }
 
+// Best-effort: disables the rule Odosian just forked away from. Kibana
+// allows toggling `enabled` on a rule via PATCH even when it's immutable
+// (unlike PUT, which rejects content-field changes on prebuilt rules) — this
+// uses PATCH specifically for that reason. Failure here doesn't fail the
+// push; the new duplicate was already created successfully.
+async function disableOldRule(
+  baseUrl: string,
+  spacePrefix: string,
+  apiKey: string,
+  oldRuleId: string,
+  verifySsl: boolean
+): Promise<boolean> {
+  try {
+    const res = await elasticFetch(
+      `${baseUrl}${spacePrefix}/api/detection_engine/rules`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `ApiKey ${apiKey}`,
+          "kbn-xsrf": "true",
+        },
+        body: JSON.stringify({ rule_id: oldRuleId, enabled: false }),
+        timeoutMs: 10000,
+      },
+      verifySsl
+    );
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const POST = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
     const body = await request.json();
-    const { connectionId, enabled = false, overwrite = false } = body;
+    const { connectionId, enabled = false } = body;
 
     const rule = await prisma.rule.findUnique({
       where: { id },
@@ -130,6 +170,12 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
     const tags: string[] = JSON.parse(rule.tags || "[]");
     const falsePositives: string[] = JSON.parse(rule.falsePositives || "[]");
     const references: string[] = JSON.parse(rule.references || "[]");
+    const relatedIntegrations: Array<{ package: string; version: string }> = JSON.parse(rule.relatedIntegrations || "[]");
+    // Computed fresh from the current query rather than trusting the stored
+    // column — guarantees this always reflects what the rule actually does,
+    // never a stale or hand-typed value.
+    const requiredFields = deriveRequiredFields(rule.query);
+    const investigationFields: string[] = JSON.parse(rule.investigationFields || "[]");
     const indexPatterns = rule.index
       ? rule.index.split(",").map((s) => s.trim()).filter(Boolean)
       : ["logs-*", "filebeat-*", "winlogbeat-*"];
@@ -147,7 +193,7 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
       language: elasticLang,
       index: indexPatterns,
       enabled,
-      tags: ["Odosian", ...tags],
+      tags: ["Data Source: Odosian", ...tags],
       interval: rule.interval || "5m",
       from: `now-${rule.fromTime?.replace("now-", "") || "6m"}`,
       max_signals: rule.maxSignals || 100,
@@ -157,31 +203,33 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
       references,
     };
 
-    if (rule.investigationGuide) {
-      payload.note = rule.investigationGuide;
-    }
+    if (rule.investigationGuide) payload.note = rule.investigationGuide;
+    if (rule.license) payload.license = rule.license;
+    if (rule.timestampOverride) payload.timestamp_override = rule.timestampOverride;
+    if (relatedIntegrations.length > 0) payload.related_integrations = relatedIntegrations;
+    if (requiredFields.length > 0) payload.required_fields = requiredFields;
+    if (rule.timelineId) payload.timeline_id = rule.timelineId;
+    if (rule.timelineTitle) payload.timeline_title = rule.timelineTitle;
+    if (investigationFields.length > 0) payload.investigation_fields = { field_names: investigationFields };
 
     const baseUrl = connection.kibanaUrl.replace(/\/+$/, "");
     const spacePrefix = connection.spaceId && connection.spaceId !== "default"
       ? `/s/${connection.spaceId}`
       : "";
 
-    let url: string;
-    let method: string;
+    const url = `${baseUrl}${spacePrefix}/api/detection_engine/rules`;
 
-    if (rule.elasticRuleId && !overwrite) {
-      url = `${baseUrl}${spacePrefix}/api/detection_engine/rules`;
-      method = "PUT";
-      payload.rule_id = rule.elasticRuleId;
-    } else if (rule.elasticRuleId && overwrite) {
-      url = `${baseUrl}${spacePrefix}/api/detection_engine/rules`;
-      method = "PUT";
-      payload.rule_id = rule.elasticRuleId;
-    } else {
-      url = `${baseUrl}${spacePrefix}/api/detection_engine/rules`;
-      method = "POST";
-      payload.rule_id = `odosian-${rule.id}`;
-    }
+    // Odosian only ever PUT-updates a rule it created itself (rule_id prefixed
+    // "odosian-"). Anything pulled in from Elastic — prebuilt or otherwise —
+    // is never edited in place: pushing it duplicates it into a new custom
+    // rule instead, then disables the original so the duplicate is the one
+    // that's live. This sidesteps Kibana's immutable-rule field restrictions
+    // entirely and means Odosian never silently rewrites a rule someone else
+    // (or Elastic itself) manages.
+    const isOwnRule = !!rule.elasticRuleId?.startsWith("odosian-");
+    const isDuplicating = !!rule.elasticRuleId && !isOwnRule;
+    const method = rule.elasticRuleId && isOwnRule ? "PUT" : "POST";
+    payload.rule_id = method === "PUT" ? rule.elasticRuleId! : `odosian-${rule.id}`;
 
     try {
       const res = await elasticFetch(
@@ -215,6 +263,17 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
 
       const elasticRuleId = responseData.rule_id || responseData.id || payload.rule_id;
 
+      let oldRuleDisabled = false;
+      if (isDuplicating) {
+        oldRuleDisabled = await disableOldRule(
+          baseUrl,
+          spacePrefix,
+          connection.apiKey,
+          rule.elasticRuleId!,
+          connection.verifySsl
+        );
+      }
+
       await prisma.rule.update({
         where: { id },
         data: { elasticRuleId },
@@ -229,6 +288,8 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
           elasticRuleId,
           connectionName: connection.name,
           enabled,
+          duplicated: isDuplicating,
+          oldRuleDisabled,
         },
         ipAddress: getClientIp(request),
       });
@@ -237,6 +298,8 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
         success: true,
         elasticRuleId,
         action: method === "POST" ? "created" : "updated",
+        duplicated: isDuplicating,
+        oldRuleDisabled,
         enabled,
       });
     } catch (fetchErr: unknown) {

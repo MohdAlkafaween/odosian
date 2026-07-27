@@ -36,6 +36,7 @@
   --font-mono: var(--font-jetbrains-mono);
 
   --animate-fade-in-up: fadeInUp 0.5s ease both;
+  --animate-fade-in: fadeIn 0.4s ease both;
   --animate-pulse-cyan: pulseCyan 3s ease-in-out infinite;
   --animate-radar-sweep: radarSweep 2s linear infinite;
   --animate-float-1: float1 9s linear infinite;
@@ -53,6 +54,19 @@
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/*
+ * Opacity-only fade, no transform. fadeInUp's `transform: translateY(0)`
+ * end state (fill-mode "both") persists on the element after the animation
+ * finishes — a lingering non-`none` transform makes that element the
+ * containing block for any `position: fixed` descendant (per spec), instead
+ * of the real viewport. Any wrapper that other fixed-position UI (modals,
+ * dropdowns) lives inside must use this instead of fadeInUp.
+ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @keyframes pulseCyan {

@@ -407,7 +407,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
                   Re-enhance
                 </Button>
               </div>
-              <EnhanceResults result={enhanceResult} />
+              <EnhanceResults result={enhanceResult} ruleId={ruleId} addToast={addToast} />
             </div>
           )}
         </>
@@ -534,9 +534,55 @@ function AnalyzeResults({ result }: { result: AnalyzeResult }) {
   );
 }
 
-function EnhanceResults({ result }: { result: EnhanceResult & { inputQuery?: string } }) {
+function EnhanceResults({ result, ruleId, addToast }: {
+  result: EnhanceResult & { inputQuery?: string };
+  ruleId?: string;
+  addToast?: ToastFn;
+}) {
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+
+  const handleApply = async () => {
+    if (!ruleId) return;
+    setApplying(true);
+    try {
+      const res = await fetch(`/api/rules/${ruleId}/apply-enhancement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          enhancedTitle: result.enhancedTitle,
+          enhancedDescription: result.enhancedDescription,
+          enhancedQuery: result.enhancedQuery,
+          newSeverity: result.newSeverity,
+          newRiskScore: result.newRiskScore,
+          investigationGuide: result.investigationGuide,
+          falsePositives: result.falsePositives,
+          references: result.references,
+          indexPatterns: result.indexPatterns,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast?.("success", `Applied to rule — saved as "${data.title}"`);
+        setApplied(true);
+      } else {
+        addToast?.("error", data.error || "Failed to apply enhancement");
+      }
+    } catch {
+      addToast?.("error", "Failed to apply enhancement");
+    } finally {
+      setApplying(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
+      {ruleId && (
+        <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="w-full gap-2">
+          {applied ? "Applied to Rule" : "Apply to Rule"}
+        </Button>
+      )}
+
       {result.enhancedTitle && (
         <Card>
           <CardHeader><h3 className="font-semibold text-text">Enhanced Metadata</h3></CardHeader>
@@ -655,7 +701,7 @@ function EnhanceTab({ rules, addToast }: {
         </div>
       )}
 
-      {result && <EnhanceResults result={result} />}
+      {result && <EnhanceResults result={result} ruleId={ruleId} addToast={addToast} />}
     </div>
   );
 }
