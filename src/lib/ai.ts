@@ -306,10 +306,9 @@ function buildAnthropicRequest(provider: { baseUrl: string; apiKey: string; mode
     "x-api-key": provider.apiKey,
     "anthropic-version": "2023-06-01",
   };
-  const body = {
+  const body: Record<string, unknown> = {
     model: provider.model,
     max_tokens: provider.maxTokens,
-    temperature: provider.temperature,
     system: systemPrompt,
     messages: [{ role: "user", content: userMessage }],
   };
