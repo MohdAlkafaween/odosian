@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
+import { elasticFetch } from "@/lib/elastic-fetch";
 
 export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) => {
   try {
@@ -20,21 +21,21 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
 
     const statusUrl = `${baseUrl}${spacePrefix}/api/status`;
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-
     try {
-      const res = await fetch(statusUrl, {
-        headers: {
-          Authorization: `ApiKey ${connection.apiKey}`,
-          "kbn-xsrf": "true",
+      const res = await elasticFetch(
+        statusUrl,
+        {
+          headers: {
+            Authorization: `ApiKey ${connection.apiKey}`,
+            "kbn-xsrf": "true",
+          },
+          timeoutMs: 10000,
         },
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+        connection.verifySsl
+      );
 
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as { version?: { number?: string }; status?: { overall?: { level?: string } } };
         await prisma.elasticConnection.update({
           where: { id: connectionId },
           data: { lastTestedAt: new Date(), lastStatus: "ok" },
@@ -56,7 +57,6 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
         502,
       );
     } catch (fetchErr: unknown) {
-      clearTimeout(timeout);
       const msg = fetchErr instanceof Error ? fetchErr.message : "Connection failed";
       await prisma.elasticConnection.update({
         where: { id: connectionId },

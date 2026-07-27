@@ -6,6 +6,7 @@ import { logAudit, getClientIp } from "@/lib/audit";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
 import { deriveCategoryFromTags } from "@/lib/rule-category";
 import { syncRuleCategoryProject } from "@/lib/category-projects";
+import { elasticFetch } from "@/lib/elastic-fetch";
 
 const PER_PAGE = 100;
 const RULE_TYPE_MAP: Record<string, string> = {
@@ -133,31 +134,30 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
     while ((page - 1) * PER_PAGE < total) {
       const url = `${baseUrl}${spacePrefix}/api/detection_engine/rules/_find?page=${page}&per_page=${PER_PAGE}&sort_field=created_at&sort_order=asc`;
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-
-      let res: Response;
+      let res: Awaited<ReturnType<typeof elasticFetch>>;
       try {
-        res = await fetch(url, {
-          headers: {
-            Authorization: `ApiKey ${connection.apiKey}`,
-            "kbn-xsrf": "true",
+        res = await elasticFetch(
+          url,
+          {
+            headers: {
+              Authorization: `ApiKey ${connection.apiKey}`,
+              "kbn-xsrf": "true",
+            },
+            timeoutMs: 30000,
           },
-          signal: controller.signal,
-        });
+          connection.verifySsl
+        );
       } catch (fetchErr: unknown) {
-        clearTimeout(timeout);
         const msg = fetchErr instanceof Error ? fetchErr.message : "Connection failed";
         return errorResponse(`Failed to reach Kibana: ${msg}`, 502);
       }
-      clearTimeout(timeout);
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "");
         return errorResponse(`Kibana returned ${res.status}: ${errText.slice(0, 200)}`, 502);
       }
 
-      const page_data: FindRulesResponse = await res.json();
+      const page_data = (await res.json()) as FindRulesResponse;
       total = page_data.total;
 
       for (const er of page_data.data) {

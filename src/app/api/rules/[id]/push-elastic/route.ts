@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 import { logAudit, getClientIp } from "@/lib/audit";
+import { elasticFetch } from "@/lib/elastic-fetch";
 
 interface ElasticRulePayload {
   rule_id?: string;
@@ -182,23 +183,28 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
       payload.rule_id = `odosian-${rule.id}`;
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
     try {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `ApiKey ${connection.apiKey}`,
-          "kbn-xsrf": "true",
+      const res = await elasticFetch(
+        url,
+        {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `ApiKey ${connection.apiKey}`,
+            "kbn-xsrf": "true",
+          },
+          body: JSON.stringify(payload),
+          timeoutMs: 15000,
         },
-        body: JSON.stringify(payload),
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+        connection.verifySsl
+      );
 
-      const responseData = await res.json().catch(() => ({}));
+      const responseData = (await res.json().catch(() => ({}))) as {
+        message?: string;
+        error?: string;
+        rule_id?: string;
+        id?: string;
+      };
 
       if (!res.ok) {
         const errMsg = responseData.message
@@ -234,7 +240,6 @@ export const POST = requireRole("ANALYST", "ADMIN")(async (request: Authenticate
         enabled,
       });
     } catch (fetchErr: unknown) {
-      clearTimeout(timeout);
       const msg = fetchErr instanceof Error ? fetchErr.message : "Connection failed";
       return errorResponse(`Failed to reach Elastic: ${msg}`, 502);
     }
