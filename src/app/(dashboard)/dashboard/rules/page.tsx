@@ -14,6 +14,14 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
 
+interface AIFlags {
+  analyzed: boolean;
+  enhanced: boolean;
+  feedback: boolean;
+  generated: boolean;
+  deployed: boolean;
+}
+
 interface RuleRow {
   id: string;
   title: string;
@@ -27,6 +35,7 @@ interface RuleRow {
   tags: string[];
   updatedAt: string;
   author: { id: string; name: string };
+  aiFlags?: AIFlags;
   _count: { analyses: number };
   [key: string]: unknown;
 }
@@ -326,6 +335,15 @@ export default function RulesListPage() {
             ))}
             {Array.isArray(row.tags) && row.tags.length > 3 && (
               <span className="text-[10px] text-text-muted">+{row.tags.length - 3}</span>
+            )}
+            {row.aiFlags && (
+              <>
+                {row.aiFlags.analyzed && <Badge preset="analyzed" className="text-[9px] px-1.5 py-0">Analyzed</Badge>}
+                {row.aiFlags.enhanced && <Badge preset="enhanced" className="text-[9px] px-1.5 py-0">Enhanced</Badge>}
+                {row.aiFlags.feedback && <Badge preset="qf" className="text-[9px] px-1.5 py-0">QF</Badge>}
+                {row.aiFlags.generated && <Badge preset="generated" className="text-[9px] px-1.5 py-0">Generated</Badge>}
+                {row.aiFlags.deployed && <Badge preset="deployed" className="text-[9px] px-1.5 py-0">Deployed</Badge>}
+              </>
             )}
           </div>
         </div>

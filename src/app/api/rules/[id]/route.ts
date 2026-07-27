@@ -30,13 +30,29 @@ export const GET = authenticate(async (request: AuthenticatedRequest, context) =
         author: { select: { id: true, name: true, email: true } },
         mitreMappings: true,
         customFields: { select: { fieldName: true, fieldValue: true, fieldType: true } },
+        analyses: { select: { analysisType: true }, distinct: ["analysisType"] },
         _count: { select: { analyses: true } },
       },
     });
 
     if (!rule) return errorResponse("Rule not found", 404);
 
-    return NextResponse.json({ rule: parseJsonFields(rule as unknown as Record<string, unknown>) });
+    const types = new Set(rule.analyses.map((a) => a.analysisType));
+    const { analyses: _a, ...rest } = rule;
+    void _a;
+
+    return NextResponse.json({
+      rule: {
+        ...parseJsonFields(rest as unknown as Record<string, unknown>),
+        aiFlags: {
+          analyzed: types.has("analyze"),
+          enhanced: types.has("enhance"),
+          feedback: types.has("feedback"),
+          generated: rule.source === "generated",
+          deployed: !!rule.elasticRuleId,
+        },
+      },
+    });
   } catch (e) {
     console.error("Failed to fetch rule:", e);
     return errorResponse("Failed to fetch rule", 500);

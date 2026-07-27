@@ -5,7 +5,8 @@ type BadgePreset =
   | "draft" | "reviewed" | "production" | "deprecated"
   | "A+" | "A" | "B" | "C" | "D" | "F"
   | "production_ready" | "needs_tuning" | "needs_rework" | "reject"
-  | "ADMIN" | "ANALYST" | "VIEWER";
+  | "ADMIN" | "ANALYST" | "VIEWER"
+  | "analyzed" | "enhanced" | "deployed" | "qf" | "generated";
 
 const presetClasses: Record<string, string> = {
   critical: "bg-severity-critical/15 text-severity-critical border-severity-critical/30",
@@ -30,6 +31,11 @@ const presetClasses: Record<string, string> = {
   ADMIN: "bg-primary/15 text-primary border-primary/30",
   ANALYST: "bg-accent/15 text-accent border-accent/30",
   VIEWER: "bg-text-secondary/15 text-text-secondary border-text-secondary/30",
+  analyzed: "bg-primary/15 text-primary border-primary/30",
+  enhanced: "bg-accent/15 text-accent border-accent/30",
+  deployed: "bg-success/15 text-success border-success/30",
+  qf: "bg-severity-medium/15 text-severity-medium border-severity-medium/30",
+  generated: "bg-[#A78BFA]/15 text-[#A78BFA] border-[#A78BFA]/30",
 };
 
 interface BadgeProps {

@@ -84,6 +84,13 @@ interface RuleDetail {
   author: { id: string; name: string; email: string };
   mitreMappings: { id: string; tacticName: string; techniqueId: string; techniqueName: string; confidence: number }[];
   customFields?: { fieldName: string; fieldValue: string; fieldType: string }[];
+  aiFlags?: {
+    analyzed: boolean;
+    enhanced: boolean;
+    feedback: boolean;
+    generated: boolean;
+    deployed: boolean;
+  };
   _count: { analyses: number };
 }
 
@@ -273,7 +280,18 @@ export default function RuleDetailPage() {
 
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-[28px] font-extrabold text-text">{rule.title}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-[28px] font-extrabold text-text">{rule.title}</h1>
+            {rule.aiFlags && (
+              <>
+                {rule.aiFlags.analyzed && <Badge preset="analyzed">Analyzed</Badge>}
+                {rule.aiFlags.enhanced && <Badge preset="enhanced">Enhanced</Badge>}
+                {rule.aiFlags.feedback && <Badge preset="qf">QF</Badge>}
+                {rule.aiFlags.generated && <Badge preset="generated">Generated</Badge>}
+                {rule.aiFlags.deployed && <Badge preset="deployed">Deployed</Badge>}
+              </>
+            )}
+          </div>
           {rule.description && (
             <p className="text-sm text-text-secondary mt-1 max-w-2xl">{rule.description}</p>
           )}

@@ -643,14 +643,17 @@ function EnhanceTab({ rules, addToast }: {
 }) {
   const [ruleId, setRuleId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [autoAnalyzing, setAutoAnalyzing] = useState(false);
   const [result, setResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
   const [needsAnalysis, setNeedsAnalysis] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   const handleEnhance = async () => {
     if (!ruleId) { addToast("error", "Select a rule"); return; }
     setLoading(true);
     setResult(null);
     setNeedsAnalysis(false);
+    setStatusMessage("Enhancing rule...");
     try {
       const res = await fetch("/api/analysis/enhance", {
         method: "POST",
@@ -668,8 +671,47 @@ function EnhanceTab({ rules, addToast }: {
       }
       setResult(data.analysis);
     } catch { addToast("error", "Enhancement failed"); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setStatusMessage(""); }
   };
+
+  const handleAnalyzeAndEnhance = async () => {
+    if (!ruleId) { addToast("error", "Select a rule"); return; }
+    setAutoAnalyzing(true);
+    setResult(null);
+    setNeedsAnalysis(false);
+    try {
+      setStatusMessage("Step 1/2: Analyzing rule...");
+      const analyzeRes = await fetch("/api/analysis/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId }),
+      });
+      if (!analyzeRes.ok) {
+        const data = await analyzeRes.json();
+        addToast("error", data.error || "Analysis failed");
+        return;
+      }
+      addToast("success", "Analysis complete. Now enhancing...");
+
+      setStatusMessage("Step 2/2: Enhancing rule...");
+      const enhanceRes = await fetch("/api/analysis/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId }),
+      });
+      const enhanceData = await enhanceRes.json();
+      if (!enhanceRes.ok) {
+        addToast("error", enhanceData.error || "Enhancement failed");
+        return;
+      }
+      setResult(enhanceData.analysis);
+      setNeedsAnalysis(false);
+      addToast("success", "Rule analyzed and enhanced successfully");
+    } catch { addToast("error", "Analyze & Enhance failed"); }
+    finally { setAutoAnalyzing(false); setStatusMessage(""); }
+  };
+
+  const isWorking = loading || autoAnalyzing;
 
   return (
     <div className="space-y-6">
@@ -682,22 +724,25 @@ function EnhanceTab({ rules, addToast }: {
               <span className="text-warning text-lg shrink-0">!</span>
               <div>
                 <p className="text-sm font-medium text-warning">Analysis Required</p>
-                <p className="text-xs text-text-secondary mt-0.5">
-                  This rule hasn&apos;t been analyzed yet. Go to the <strong>Analyze Rule</strong> tab and run an analysis first, then come back to enhance it.
+                <p className="text-xs text-text-secondary mt-0.5 mb-2">
+                  This rule hasn&apos;t been analyzed yet. You can analyze and enhance it in one step.
                 </p>
+                <Button onClick={handleAnalyzeAndEnhance} loading={autoAnalyzing} variant="accent" size="sm">
+                  {autoAnalyzing ? statusMessage : "Analyze & Enhance"}
+                </Button>
               </div>
             </div>
           )}
-          <Button onClick={handleEnhance} loading={loading} className="w-full">
+          <Button onClick={handleEnhance} loading={isWorking} disabled={isWorking} className="w-full">
             {loading ? "Enhancing..." : "Enhance Rule"}
           </Button>
         </CardBody>
       </Card>
 
-      {loading && (
+      {isWorking && (
         <div className="flex flex-col items-center gap-3 py-12">
           <Spinner size="lg" />
-          <p className="text-text-secondary text-sm">AI is enhancing the rule...</p>
+          <p className="text-text-secondary text-sm">{statusMessage || "AI is enhancing the rule..."}</p>
         </div>
       )}
 

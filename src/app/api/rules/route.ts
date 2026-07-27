@@ -67,6 +67,7 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
         orderBy: { [orderField]: sortDir },
         include: {
           author: { select: { id: true, name: true } },
+          analyses: { select: { analysisType: true }, distinct: ["analysisType"] },
           _count: { select: { analyses: true } },
         },
       }),
@@ -75,8 +76,24 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
       prisma.rule.count({ where: { ...whereWithoutCovered, covered: true } }),
     ]);
 
+    const rulesWithFlags = rules.map((r) => {
+      const types = new Set(r.analyses.map((a) => a.analysisType));
+      const { analyses: _a, ...rest } = r;
+      void _a;
+      return {
+        ...parseJsonFields(rest as unknown as Record<string, unknown>),
+        aiFlags: {
+          analyzed: types.has("analyze"),
+          enhanced: types.has("enhance"),
+          feedback: types.has("feedback"),
+          generated: r.source === "generated",
+          deployed: !!r.elasticRuleId,
+        },
+      };
+    });
+
     return NextResponse.json({
-      rules: rules.map(parseJsonFields),
+      rules: rulesWithFlags,
       pagination: {
         page,
         limit,
