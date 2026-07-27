@@ -12,6 +12,9 @@ import { NotificationBell } from "@/components/notification-bell";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
 import { useThemeStore } from "@/stores/theme";
+import { useTabStore } from "@/stores/tabs";
+import { AITabBar } from "@/components/ai-tab-bar";
+import { AITabContent } from "@/components/ai-tab-content";
 
 export default function DashboardLayout({
   children,
@@ -24,6 +27,7 @@ export default function DashboardLayout({
   const { clearAuth } = useAuthStore();
   const { addToast } = useToastStore();
   const { initTheme } = useThemeStore();
+  const activeTabId = useTabStore((s) => s.activeTabId);
   const router = useRouter();
 
   useEffect(() => { initTheme(); }, [initTheme]);
@@ -113,14 +117,20 @@ export default function DashboardLayout({
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto bg-bg hex-bg-subtle">
-            <div className="p-6 pt-20 md:pt-6 max-w-[1400px] mx-auto animate-fade-in">
-              <div className="md:hidden mb-4">
-                <Breadcrumb />
+          <AITabBar />
+
+          {activeTabId ? (
+            <AITabContent />
+          ) : (
+            <main className="flex-1 overflow-auto bg-bg hex-bg-subtle">
+              <div className="p-6 pt-20 md:pt-6 max-w-[1400px] mx-auto animate-fade-in">
+                <div className="md:hidden mb-4">
+                  <Breadcrumb />
+                </div>
+                {children}
               </div>
-              {children}
-            </div>
-          </main>
+            </main>
+          )}
         </div>
       </div>
 

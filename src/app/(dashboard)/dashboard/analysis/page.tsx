@@ -14,6 +14,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
+import { useTabStore } from "@/stores/tabs";
 import type { AnalyzeResult, EnhanceResult, GenerateResult, FeedbackResult } from "@/lib/ai";
 
 type ToastFn = (type: "success" | "error" | "info" | "warning", msg: string) => void;
@@ -92,7 +93,7 @@ function AnalysisContent() {
               <GenerateTab addToast={addToast} router={router} />
             )}
             {activeTab === "feedback" && (
-              <FeedbackTab addToast={addToast} />
+              <FeedbackTab rules={rules} addToast={addToast} />
             )}
           </>
         )}
@@ -308,9 +309,12 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
   const [mode, setMode] = useState<"rule" | "query">(defaultRuleId ? "rule" : "rule");
   const [enhancing, setEnhancing] = useState(false);
   const [enhanceResult, setEnhanceResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
+  const { addTab, updateTab } = useTabStore();
 
   const handleEnhanceDirect = useCallback(async () => {
     if (!ruleId) return;
+    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
+    const tabId = addTab({ type: "enhance", title: `Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Enhancing rule..." });
     setEnhancing(true);
     setEnhanceResult(null);
     try {
@@ -320,16 +324,27 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
         body: JSON.stringify({ ruleId }),
       });
       const data = await res.json();
-      if (!res.ok) { addToast("error", data.error || "Enhancement failed"); return; }
+      if (!res.ok) {
+        updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
+        addToast("error", data.error || "Enhancement failed");
+        return;
+      }
       setEnhanceResult(data.analysis);
+      updateTab(tabId, { status: "completed", result: data.analysis });
       addToast("success", "Rule enhanced");
-    } catch { addToast("error", "Enhancement failed"); }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Enhancement failed" });
+      addToast("error", "Enhancement failed");
+    }
     finally { setEnhancing(false); }
-  }, [ruleId, addToast]);
+  }, [ruleId, rules, addToast, addTab, updateTab]);
 
   const handleAnalyze = useCallback(async () => {
     if (mode === "rule" && !ruleId) { addToast("error", "Select a rule"); return; }
     if (mode === "query" && !rawQuery) { addToast("error", "Enter a query"); return; }
+
+    const ruleName = mode === "rule" ? rules.find((r) => r.id === ruleId)?.title || "Rule" : "Raw Query";
+    const tabId = addTab({ type: "analyze", title: `Analyze: ${ruleName}`, ruleId: mode === "rule" ? ruleId : undefined, ruleName, status: "running", statusMessage: "AI is analyzing..." });
 
     setLoading(true);
     setResult(null);
@@ -342,11 +357,19 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) { addToast("error", data.error || "Analysis failed"); return; }
+      if (!res.ok) {
+        updateTab(tabId, { status: "failed", error: data.error || "Analysis failed" });
+        addToast("error", data.error || "Analysis failed");
+        return;
+      }
       setResult(data.analysis);
-    } catch { addToast("error", "Analysis failed"); }
+      updateTab(tabId, { status: "completed", result: data.analysis });
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Analysis failed" });
+      addToast("error", "Analysis failed");
+    }
     finally { setLoading(false); }
-  }, [mode, ruleId, rawQuery, language, addToast]);
+  }, [mode, ruleId, rawQuery, language, rules, addToast, addTab, updateTab]);
 
   return (
     <div className="space-y-6">
@@ -647,9 +670,12 @@ function EnhanceTab({ rules, addToast }: {
   const [result, setResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
   const [needsAnalysis, setNeedsAnalysis] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const { addTab, updateTab } = useTabStore();
 
   const handleEnhance = async () => {
     if (!ruleId) { addToast("error", "Select a rule"); return; }
+    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
+    const tabId = addTab({ type: "enhance", title: `Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Enhancing rule..." });
     setLoading(true);
     setResult(null);
     setNeedsAnalysis(false);
@@ -664,18 +690,26 @@ function EnhanceTab({ rules, addToast }: {
       if (!res.ok) {
         if (res.status === 400 && data.error?.includes("analyze the rule first")) {
           setNeedsAnalysis(true);
+          updateTab(tabId, { status: "failed", error: "Analysis required first" });
         } else {
+          updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
           addToast("error", data.error || "Enhancement failed");
         }
         return;
       }
       setResult(data.analysis);
-    } catch { addToast("error", "Enhancement failed"); }
+      updateTab(tabId, { status: "completed", result: data.analysis });
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Enhancement failed" });
+      addToast("error", "Enhancement failed");
+    }
     finally { setLoading(false); setStatusMessage(""); }
   };
 
   const handleAnalyzeAndEnhance = async () => {
     if (!ruleId) { addToast("error", "Select a rule"); return; }
+    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
+    const tabId = addTab({ type: "enhance", title: `Analyze & Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Step 1/2: Analyzing rule..." });
     setAutoAnalyzing(true);
     setResult(null);
     setNeedsAnalysis(false);
@@ -688,12 +722,14 @@ function EnhanceTab({ rules, addToast }: {
       });
       if (!analyzeRes.ok) {
         const data = await analyzeRes.json();
+        updateTab(tabId, { status: "failed", error: data.error || "Analysis failed" });
         addToast("error", data.error || "Analysis failed");
         return;
       }
       addToast("success", "Analysis complete. Now enhancing...");
 
       setStatusMessage("Step 2/2: Enhancing rule...");
+      updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
       const enhanceRes = await fetch("/api/analysis/enhance", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -701,13 +737,18 @@ function EnhanceTab({ rules, addToast }: {
       });
       const enhanceData = await enhanceRes.json();
       if (!enhanceRes.ok) {
+        updateTab(tabId, { status: "failed", error: enhanceData.error || "Enhancement failed" });
         addToast("error", enhanceData.error || "Enhancement failed");
         return;
       }
       setResult(enhanceData.analysis);
       setNeedsAnalysis(false);
+      updateTab(tabId, { status: "completed", result: enhanceData.analysis });
       addToast("success", "Rule analyzed and enhanced successfully");
-    } catch { addToast("error", "Analyze & Enhance failed"); }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Analyze & Enhance failed" });
+      addToast("error", "Analyze & Enhance failed");
+    }
     finally { setAutoAnalyzing(false); setStatusMessage(""); }
   };
 
@@ -759,9 +800,12 @@ function GenerateTab({ addToast, router }: {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
+  const { addTab, updateTab } = useTabStore();
 
   const handleGenerate = async () => {
     if (description.length < 10) { addToast("error", "Description must be at least 10 characters"); return; }
+    const shortDesc = description.length > 40 ? description.slice(0, 40) + "..." : description;
+    const tabId = addTab({ type: "generate", title: `Generate: ${shortDesc}`, status: "running", statusMessage: "AI is generating a detection rule..." });
     setLoading(true);
     setResult(null);
     try {
@@ -771,9 +815,17 @@ function GenerateTab({ addToast, router }: {
         body: JSON.stringify({ description }),
       });
       const data = await res.json();
-      if (!res.ok) { addToast("error", data.error || "Generation failed"); return; }
+      if (!res.ok) {
+        updateTab(tabId, { status: "failed", error: data.error || "Generation failed" });
+        addToast("error", data.error || "Generation failed");
+        return;
+      }
       setResult(data.analysis);
-    } catch { addToast("error", "Generation failed"); }
+      updateTab(tabId, { status: "completed", result: data.analysis, title: `Generate: ${data.analysis.title || shortDesc}` });
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Generation failed" });
+      addToast("error", "Generation failed");
+    }
     finally { setLoading(false); }
   };
 
@@ -866,40 +918,83 @@ function GenerateTab({ addToast, router }: {
   );
 }
 
-function FeedbackTab({ addToast }: { addToast: ToastFn }) {
+function FeedbackTab({ rules, addToast }: { rules: RuleOption[]; addToast: ToastFn }) {
   const [query, setQuery] = useState("");
   const [language, setLanguage] = useState("kuery");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<FeedbackResult | null>(null);
+  const [mode, setMode] = useState<"rule" | "query">("rule");
+  const [ruleId, setRuleId] = useState("");
+  const [fetchingQuery, setFetchingQuery] = useState(false);
+  const { addTab, updateTab } = useTabStore();
 
-  const handleFeedback = async () => {
-    if (!query) { addToast("error", "Enter a query"); return; }
+  const runFeedback = async (feedbackQuery: string, feedbackLang: string, ruleName: string) => {
+    const tabId = addTab({ type: "feedback", title: `QF: ${ruleName}`, ruleId: mode === "rule" ? ruleId : undefined, ruleName, status: "running", statusMessage: "AI is reviewing the query..." });
     setLoading(true);
     setResult(null);
     try {
       const res = await fetch("/api/analysis/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, language }),
+        body: JSON.stringify({ query: feedbackQuery, language: feedbackLang }),
       });
       const data = await res.json();
-      if (!res.ok) { addToast("error", data.error || "Feedback failed"); return; }
+      if (!res.ok) {
+        updateTab(tabId, { status: "failed", error: data.error || "Feedback failed" });
+        addToast("error", data.error || "Feedback failed");
+        return;
+      }
       setResult(data.analysis);
-    } catch { addToast("error", "Feedback failed"); }
+      updateTab(tabId, { status: "completed", result: data.analysis });
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Feedback failed" });
+      addToast("error", "Feedback failed");
+    }
     finally { setLoading(false); }
+  };
+
+  const handleFeedback = async () => {
+    if (mode === "query") {
+      if (!query) { addToast("error", "Enter a query"); return; }
+      await runFeedback(query, language, "Raw Query");
+    } else {
+      if (!ruleId) { addToast("error", "Select a rule"); return; }
+      const rule = rules.find((r) => r.id === ruleId);
+      setFetchingQuery(true);
+      try {
+        const res = await fetch(`/api/rules/${ruleId}`);
+        const data = await res.json();
+        if (!res.ok) { addToast("error", "Failed to fetch rule"); return; }
+        const ruleQuery = data.rule?.query;
+        const ruleLang = data.rule?.language || "kuery";
+        if (!ruleQuery) { addToast("error", "Rule has no query"); return; }
+        await runFeedback(ruleQuery, ruleLang, rule?.title || "Rule");
+      } catch { addToast("error", "Failed to fetch rule"); }
+      finally { setFetchingQuery(false); }
+    }
   };
 
   return (
     <div className="space-y-6">
       <Card>
         <CardBody className="space-y-4">
-          <Textarea label="Detection Query" value={query} onChange={(e) => setQuery(e.target.value)} rows={6} className="font-mono text-sm" placeholder="Paste your detection query here for quick feedback..." />
-          <Select label="Language" value={language} onChange={(e) => setLanguage(e.target.value)} options={[
-            { value: "kuery", label: "KQL" }, { value: "eql", label: "EQL" },
-            { value: "lucene", label: "Lucene" }, { value: "esql", label: "ES|QL" },
-          ]} />
-          <Button onClick={handleFeedback} loading={loading} className="w-full">
-            {loading ? "Getting Feedback..." : "Get Feedback"}
+          <div className="flex gap-2 mb-2">
+            <Button size="sm" variant={mode === "rule" ? "primary" : "ghost"} onClick={() => setMode("rule")}>Select Rule</Button>
+            <Button size="sm" variant={mode === "query" ? "primary" : "ghost"} onClick={() => setMode("query")}>Raw Query</Button>
+          </div>
+          {mode === "rule" ? (
+            <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
+          ) : (
+            <>
+              <Textarea label="Detection Query" value={query} onChange={(e) => setQuery(e.target.value)} rows={6} className="font-mono text-sm" placeholder="Paste your detection query here for quick feedback..." />
+              <Select label="Language" value={language} onChange={(e) => setLanguage(e.target.value)} options={[
+                { value: "kuery", label: "KQL" }, { value: "eql", label: "EQL" },
+                { value: "lucene", label: "Lucene" }, { value: "esql", label: "ES|QL" },
+              ]} />
+            </>
+          )}
+          <Button onClick={handleFeedback} loading={loading || fetchingQuery} className="w-full">
+            {loading ? "Getting Feedback..." : fetchingQuery ? "Fetching rule query..." : "Get Quick Feedback"}
           </Button>
         </CardBody>
       </Card>
