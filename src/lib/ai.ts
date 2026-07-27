@@ -295,6 +295,61 @@ async function getProvider() {
   };
 }
 
+function isAnthropicProvider(baseUrl: string): boolean {
+  return baseUrl.includes("anthropic.com");
+}
+
+function buildAnthropicRequest(provider: { baseUrl: string; apiKey: string; model: string; maxTokens: number; temperature: number }, systemPrompt: string, userMessage: string) {
+  const url = `${provider.baseUrl}/v1/messages`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-api-key": provider.apiKey,
+    "anthropic-version": "2023-06-01",
+  };
+  const body = {
+    model: provider.model,
+    max_tokens: provider.maxTokens,
+    temperature: provider.temperature,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userMessage }],
+  };
+  return { url, headers, body };
+}
+
+function buildOpenAIRequest(provider: { baseUrl: string; apiKey: string; model: string; maxTokens: number; temperature: number }, systemPrompt: string, userMessage: string) {
+  const url = `${provider.baseUrl}/chat/completions`;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${provider.apiKey}`,
+  };
+  const body = {
+    model: provider.model,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    max_tokens: provider.maxTokens,
+    temperature: provider.temperature,
+    response_format: { type: "json_object" },
+  };
+  return { url, headers, body };
+}
+
+function extractResponseContent(data: Record<string, unknown>, isAnthropic: boolean): { content: string; tokensUsed: number } {
+  if (isAnthropic) {
+    const contentArray = data.content as Array<{ type: string; text: string }> | undefined;
+    const content = contentArray?.[0]?.text || "";
+    const usage = data.usage as { input_tokens?: number; output_tokens?: number } | undefined;
+    const tokensUsed = (usage?.input_tokens || 0) + (usage?.output_tokens || 0);
+    return { content, tokensUsed };
+  }
+  const choices = data.choices as Array<{ message: { content: string } }> | undefined;
+  const content = choices?.[0]?.message?.content || "";
+  const usage = data.usage as { total_tokens?: number; prompt_tokens?: number; completion_tokens?: number } | undefined;
+  const tokensUsed = usage?.total_tokens ?? ((usage?.prompt_tokens || 0) + (usage?.completion_tokens || 0));
+  return { content, tokensUsed };
+}
+
 const MAX_ATTEMPTS = 3;
 const BACKOFF_DELAYS = [1000, 3000];
 
@@ -307,18 +362,13 @@ export async function callAI<T>(promptName: string, userMessage: string): Promis
   });
   if (!prompt) throw new Error(`Prompt "${promptName}" not found or inactive`);
 
-  const url = `${provider.baseUrl}/chat/completions`;
-
-  const body = {
-    model: provider.model,
-    messages: [
-      { role: "system", content: prompt.systemPrompt },
-      { role: "user", content: userMessage },
-    ],
-    max_tokens: provider.maxTokens,
-    temperature: provider.temperature,
-    response_format: { type: "json_object" },
-  };
+  const anthropic = isAnthropicProvider(provider.baseUrl);
+  const systemPrompt = anthropic
+    ? prompt.systemPrompt + "\n\nIMPORTANT: You must respond with valid JSON only. No markdown, no explanation, just the JSON object."
+    : prompt.systemPrompt;
+  const { url, headers, body } = anthropic
+    ? buildAnthropicRequest(provider, systemPrompt, userMessage)
+    : buildOpenAIRequest(provider, prompt.systemPrompt, userMessage);
 
   let lastError: Error | null = null;
 
@@ -336,10 +386,7 @@ export async function callAI<T>(promptName: string, userMessage: string): Promis
     try {
       res = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${provider.apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -376,10 +423,7 @@ export async function callAI<T>(promptName: string, userMessage: string): Promis
 
     try {
       const data = await res.json();
-      const content = data.choices?.[0]?.message?.content || "";
-      const tokensUsed = data.usage?.total_tokens ?? data.usage?.prompt_tokens
-        ? (data.usage.prompt_tokens || 0) + (data.usage.completion_tokens || 0)
-        : 0;
+      const { content, tokensUsed } = extractResponseContent(data, anthropic);
 
       const result = parseAIJson<T>(content);
 
@@ -403,18 +447,13 @@ export async function callAIWithSystemPrompt<T>(systemPrompt: string, userMessag
   const provider = await getProvider();
   if (!provider.apiKey) throw new Error("AI provider API key is not configured");
 
-  const url = `${provider.baseUrl}/chat/completions`;
-
-  const body = {
-    model: provider.model,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage },
-    ],
-    max_tokens: provider.maxTokens,
-    temperature: provider.temperature,
-    response_format: { type: "json_object" },
-  };
+  const anthropic = isAnthropicProvider(provider.baseUrl);
+  const effectiveSystemPrompt = anthropic
+    ? systemPrompt + "\n\nIMPORTANT: You must respond with valid JSON only. No markdown, no explanation, just the JSON object."
+    : systemPrompt;
+  const { url, headers, body } = anthropic
+    ? buildAnthropicRequest(provider, effectiveSystemPrompt, userMessage)
+    : buildOpenAIRequest(provider, systemPrompt, userMessage);
 
   let lastError: Error | null = null;
 
@@ -432,10 +471,7 @@ export async function callAIWithSystemPrompt<T>(systemPrompt: string, userMessag
     try {
       res = await fetch(url, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${provider.apiKey}`,
-        },
+        headers,
         body: JSON.stringify(body),
       });
     } catch (e) {
@@ -463,10 +499,7 @@ export async function callAIWithSystemPrompt<T>(systemPrompt: string, userMessag
 
     try {
       const data = await res.json();
-      const content = data.choices?.[0]?.message?.content || "";
-      const tokensUsed = data.usage?.total_tokens ?? data.usage?.prompt_tokens
-        ? (data.usage.prompt_tokens || 0) + (data.usage.completion_tokens || 0)
-        : 0;
+      const { content, tokensUsed } = extractResponseContent(data, anthropic);
 
       return { result: parseAIJson<T>(content), modelUsed: provider.name, tokensUsed, latencyMs };
     } catch (e) {
