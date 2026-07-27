@@ -10,10 +10,30 @@ import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
 
 const AI_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_AI || "10");
 
-function buildRuleMessage(rule: Record<string, unknown>): string {
-  const tags = typeof rule.tags === "string" ? JSON.parse(rule.tags as string) : rule.tags || [];
-  const fps = typeof rule.falsePositives === "string" ? JSON.parse(rule.falsePositives as string) : rule.falsePositives || [];
-  const refs = typeof rule.references === "string" ? JSON.parse(rule.references as string) : rule.references || [];
+interface MitreRow {
+  tacticId: string;
+  tacticName: string;
+  techniqueId: string;
+  techniqueName: string;
+  subTechniqueId: string | null;
+  subTechniqueName: string | null;
+}
+
+function buildRuleMessage(rule: Record<string, unknown>, mitreMappings: MitreRow[]): string {
+  const parse = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v || []);
+  const tags: string[] = parse(rule.tags);
+  const fps: string[] = parse(rule.falsePositives);
+  const refs: string[] = parse(rule.references);
+  const relatedIntegrations: { package: string; version: string }[] = parse(rule.relatedIntegrations);
+  const requiredFields: { name: string; type: string }[] = parse(rule.requiredFields);
+  const investigationFields: string[] = parse(rule.investigationFields);
+
+  const mitreLines = mitreMappings.map((m) => {
+    let line = `  - ${m.tacticName} (${m.tacticId})`;
+    if (m.techniqueId) line += ` > ${m.techniqueName} (${m.techniqueId})`;
+    if (m.subTechniqueId) line += ` > ${m.subTechniqueName} (${m.subTechniqueId})`;
+    return line;
+  });
 
   return `Rule Title: ${rule.title}
 Description: ${rule.description || "None"}
@@ -25,10 +45,22 @@ Index Patterns: ${rule.index || "Not specified"}
 Interval: ${rule.interval}
 From Time: ${rule.fromTime}
 Max Signals: ${rule.maxSignals}
+Status: ${rule.status || "draft"}
+Category: ${rule.category || "Uncategorized"}
+Source: ${rule.source || "manual"}
+License: ${rule.license || "None"}
+Timestamp Override: ${rule.timestampOverride || "None"}
 Tags: ${tags.length > 0 ? tags.join(", ") : "None"}
 Investigation Guide: ${rule.investigationGuide || "None"}
 False Positives: ${fps.length > 0 ? fps.join("; ") : "None documented"}
 References: ${refs.length > 0 ? refs.join(", ") : "None"}
+Related Integrations: ${relatedIntegrations.length > 0 ? relatedIntegrations.map((i) => `${i.package}@${i.version}`).join(", ") : "None"}
+Required Fields: ${requiredFields.length > 0 ? requiredFields.map((f) => `${f.name} (${f.type})`).join(", ") : "None"}
+Investigation Fields: ${investigationFields.length > 0 ? investigationFields.join(", ") : "None"}
+Timeline: ${rule.timelineTitle || "None"}
+Elastic Rule ID: ${rule.elasticRuleId || "Not deployed"}
+MITRE ATT&CK Mappings:
+${mitreLines.length > 0 ? mitreLines.join("\n") : "  None"}
 
 Detection Query:
 ${rule.query}`;
@@ -44,20 +76,25 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       let ruleId: string | null = null;
 
       if (validated.data.ruleId) {
-        const rule = await prisma.rule.findUnique({ where: { id: validated.data.ruleId } });
+        const rule = await prisma.rule.findUnique({
+          where: { id: validated.data.ruleId },
+          include: { mitreMappings: true },
+        });
         if (!rule) return errorResponse("Rule not found", 404);
         ruleId = rule.id;
-        userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>);
+        userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
       } else {
         userMessage = `Detection Query (${validated.data.language || "kuery"}, ${validated.data.ruleType || "query"}):\n${validated.data.query}`;
       }
 
       const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
 
+      const analysisType = validated.data.postEnhancement ? "post_enhance" : "analyze";
+
       const analysis = await prisma.analysis.create({
         data: {
           ruleId,
-          analysisType: "analyze",
+          analysisType,
           inputQuery: validated.data.query || "",
           score: result.score || 0,
           rating: result.rating || "",
@@ -97,7 +134,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
         action: "ANALYSIS_CREATED",
         targetType: "analysis",
         targetId: analysis.id,
-        details: { analysisType: "analyze", ruleId, score: result.score },
+        details: { analysisType, ruleId, score: result.score },
         ipAddress: getClientIp(request),
       });
 

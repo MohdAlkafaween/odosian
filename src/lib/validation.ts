@@ -99,6 +99,7 @@ export const analyzeSchema = z.object({
   query: z.string().min(1).max(10000).optional(),
   language: z.string().optional(),
   ruleType: z.string().optional(),
+  postEnhancement: z.boolean().optional(),
 }).refine((data) => data.ruleId || data.query, {
   message: "Either ruleId or query is required",
 });

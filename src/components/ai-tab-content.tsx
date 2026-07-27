@@ -215,6 +215,8 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
 function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { inputQuery?: string }; ruleId?: string }) {
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [analyzingPost, setAnalyzingPost] = useState(false);
+  const [postAnalysisResult, setPostAnalysisResult] = useState<AnalyzeResult | null>(null);
   const { addToast } = useToastStore();
 
   const handleApply = async () => {
@@ -250,12 +252,46 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
     }
   };
 
+  const handlePostEnhanceAnalysis = async () => {
+    if (!ruleId) return;
+    setAnalyzingPost(true);
+    try {
+      const res = await fetch("/api/analysis/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId, postEnhancement: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPostAnalysisResult(data.analysis);
+        addToast("success", `Post-enhancement score: ${data.analysis.score}/100`);
+      } else {
+        addToast("error", data.error || "Post-enhancement analysis failed");
+      }
+    } catch {
+      addToast("error", "Post-enhancement analysis failed");
+    } finally {
+      setAnalyzingPost(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {ruleId && (
-        <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="w-full gap-2">
-          {applied ? "Applied to Rule" : "Apply to Rule"}
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="flex-1 gap-2">
+            {applied ? "Applied to Rule" : "Apply to Rule"}
+          </Button>
+          <Button
+            onClick={handlePostEnhanceAnalysis}
+            loading={analyzingPost}
+            disabled={!!postAnalysisResult}
+            variant="primary"
+            className="flex-1 gap-2"
+          >
+            {postAnalysisResult ? `Score: ${postAnalysisResult.score}/100` : "Analyze After Enhancement"}
+          </Button>
+        </div>
       )}
 
       {result.enhancedTitle && (
@@ -306,6 +342,44 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
         <Card>
           <CardHeader><h3 className="font-semibold text-text">Investigation Guide</h3></CardHeader>
           <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.investigationGuide}</p></CardBody>
+        </Card>
+      )}
+
+      {postAnalysisResult && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-success">Analysis After Enhancement</h3></CardHeader>
+          <CardBody className="space-y-4">
+            <div className="flex items-center gap-5">
+              <ScoreGauge score={postAnalysisResult.score} size={80} label="Score" />
+              {postAnalysisResult.rating && <Badge preset={postAnalysisResult.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{postAnalysisResult.rating}</Badge>}
+            </div>
+            {postAnalysisResult.feedback && (
+              <div>
+                <p className="text-xs font-semibold text-text-muted mb-1.5">Assessment</p>
+                <p className="text-sm text-text-secondary whitespace-pre-wrap">{postAnalysisResult.feedback}</p>
+              </div>
+            )}
+            {(postAnalysisResult.strengths?.length > 0 || postAnalysisResult.weaknesses?.length > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {postAnalysisResult.strengths?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-success mb-1.5">Strengths</p>
+                    <ul className="space-y-1">
+                      {postAnalysisResult.strengths.map((s: string, i: number) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-success shrink-0">&#10003;</span>{s}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {postAnalysisResult.weaknesses?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-danger mb-1.5">Remaining Weaknesses</p>
+                    <ul className="space-y-1">
+                      {postAnalysisResult.weaknesses.map((w: string, i: number) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-danger shrink-0">&#10007;</span>{w}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardBody>
         </Card>
       )}
     </div>

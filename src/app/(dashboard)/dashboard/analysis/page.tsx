@@ -564,6 +564,37 @@ function EnhanceResults({ result, ruleId, addToast }: {
 }) {
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
+  const [analyzingPost, setAnalyzingPost] = useState(false);
+  const [postAnalysisResult, setPostAnalysisResult] = useState<AnalyzeResult | null>(null);
+  const { addTab, updateTab } = useTabStore();
+
+  const handlePostEnhanceAnalysis = async () => {
+    if (!ruleId || !result.enhancedQuery) return;
+    const ruleName = result.enhancedTitle || "Enhanced Rule";
+    const tabId = addTab({ type: "analyze", title: `Post-Enhancement Analysis: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Analyzing enhanced query..." });
+    setAnalyzingPost(true);
+    try {
+      const res = await fetch("/api/analysis/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId, postEnhancement: true }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setPostAnalysisResult(data.analysis);
+        updateTab(tabId, { status: "completed", result: data.analysis });
+        addToast?.("success", `Post-enhancement score: ${data.analysis.score}/100`);
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Analysis failed" });
+        addToast?.("error", data.error || "Post-enhancement analysis failed");
+      }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Analysis failed" });
+      addToast?.("error", "Post-enhancement analysis failed");
+    } finally {
+      setAnalyzingPost(false);
+    }
+  };
 
   const handleApply = async () => {
     if (!ruleId) return;
@@ -601,9 +632,51 @@ function EnhanceResults({ result, ruleId, addToast }: {
   return (
     <div className="space-y-6">
       {ruleId && (
-        <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="w-full gap-2">
-          {applied ? "Applied to Rule" : "Apply to Rule"}
-        </Button>
+        <div className="flex gap-3">
+          <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="flex-1 gap-2">
+            {applied ? "Applied to Rule" : "Apply to Rule"}
+          </Button>
+          <Button
+            onClick={handlePostEnhanceAnalysis}
+            loading={analyzingPost}
+            disabled={!!postAnalysisResult}
+            variant="outline"
+            className="flex-1 gap-2"
+          >
+            {postAnalysisResult ? `Score: ${postAnalysisResult.score}/100` : analyzingPost ? "Analyzing..." : "Analyze After Enhancement"}
+          </Button>
+        </div>
+      )}
+
+      {postAnalysisResult && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold text-text">Post-Enhancement Analysis</h3>
+              <div className="flex items-center gap-2">
+                <span className={`text-lg font-bold ${
+                  postAnalysisResult.score >= 80 ? "text-success" : postAnalysisResult.score >= 60 ? "text-accent" : postAnalysisResult.score >= 40 ? "text-severity-medium" : "text-severity-high"
+                }`}>{postAnalysisResult.score}/100</span>
+                {postAnalysisResult.rating && <Badge preset={postAnalysisResult.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{postAnalysisResult.rating}</Badge>}
+              </div>
+            </div>
+          </CardHeader>
+          <CardBody className="space-y-2">
+            {postAnalysisResult.feedback && <p className="text-sm text-text-secondary">{postAnalysisResult.feedback}</p>}
+            {postAnalysisResult.strengths?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-success mb-1">Strengths</p>
+                <ul className="space-y-0.5">{postAnalysisResult.strengths.map((s, i) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-success">&#10003;</span>{s}</li>)}</ul>
+              </div>
+            )}
+            {postAnalysisResult.weaknesses?.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-danger mb-1">Remaining Weaknesses</p>
+                <ul className="space-y-0.5">{postAnalysisResult.weaknesses.map((w, i) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-danger">&#10007;</span>{w}</li>)}</ul>
+              </div>
+            )}
+          </CardBody>
+        </Card>
       )}
 
       {result.enhancedTitle && (

@@ -14,7 +14,10 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       const validated = await validateRequest(enhanceSchema, request);
       if ("error" in validated) return validated.error;
 
-      const rule = await prisma.rule.findUnique({ where: { id: validated.data.ruleId } });
+      const rule = await prisma.rule.findUnique({
+        where: { id: validated.data.ruleId },
+        include: { mitreMappings: true },
+      });
       if (!rule) return errorResponse("Rule not found", 404);
 
       const latestAnalysis = await prisma.analysis.findFirst({
@@ -30,7 +33,20 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       const suggestions = JSON.parse(latestAnalysis.suggestions || "[]");
       const weaknesses = JSON.parse(latestAnalysis.weaknesses || "[]");
 
-      const tags = JSON.parse(rule.tags || "[]");
+      const parse = (v: string | null) => JSON.parse(v || "[]");
+      const tags: string[] = parse(rule.tags);
+      const fps: string[] = parse(rule.falsePositives);
+      const refs: string[] = parse(rule.references);
+      const relatedIntegrations: { package: string; version: string }[] = parse(rule.relatedIntegrations);
+      const requiredFields: { name: string; type: string }[] = parse(rule.requiredFields);
+      const investigationFields: string[] = parse(rule.investigationFields);
+
+      const mitreLines = rule.mitreMappings.map((m) => {
+        let line = `  - ${m.tacticName} (${m.tacticId})`;
+        if (m.techniqueId) line += ` > ${m.techniqueName} (${m.techniqueId})`;
+        if (m.subTechniqueId) line += ` > ${m.subTechniqueName} (${m.subTechniqueId})`;
+        return line;
+      });
 
       const userMessage = `Original Rule:
 Title: ${rule.title}
@@ -40,8 +56,25 @@ Severity: ${rule.severity}
 Risk Score: ${rule.riskScore}
 Language: ${rule.language}
 Index: ${rule.index || "Not specified"}
-Tags: ${tags.join(", ") || "None"}
+Interval: ${rule.interval}
+From Time: ${rule.fromTime}
+Max Signals: ${rule.maxSignals}
+Status: ${rule.status}
+Category: ${rule.category || "Uncategorized"}
+Source: ${rule.source}
+License: ${rule.license || "None"}
+Timestamp Override: ${rule.timestampOverride || "None"}
+Tags: ${tags.length > 0 ? tags.join(", ") : "None"}
 Investigation Guide: ${rule.investigationGuide || "None"}
+False Positives: ${fps.length > 0 ? fps.join("; ") : "None documented"}
+References: ${refs.length > 0 ? refs.join(", ") : "None"}
+Related Integrations: ${relatedIntegrations.length > 0 ? relatedIntegrations.map((i) => `${i.package}@${i.version}`).join(", ") : "None"}
+Required Fields: ${requiredFields.length > 0 ? requiredFields.map((f) => `${f.name} (${f.type})`).join(", ") : "None"}
+Investigation Fields: ${investigationFields.length > 0 ? investigationFields.join(", ") : "None"}
+Timeline: ${rule.timelineTitle || "None"}
+Elastic Rule ID: ${rule.elasticRuleId || "Not deployed"}
+MITRE ATT&CK Mappings:
+${mitreLines.length > 0 ? mitreLines.join("\n") : "  None"}
 
 Detection Query:
 ${rule.query}
@@ -65,8 +98,8 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
           analysisType: "enhance",
           inputQuery: rule.query,
           outputQuery: result.enhancedQuery || "",
-          score: latestAnalysis.score,
-          rating: latestAnalysis.rating,
+          score: 0,
+          rating: "",
           feedback: JSON.stringify(result.changelog || []),
           mitreMappings: JSON.stringify(result.newMitreMappings || []),
           modelUsed,

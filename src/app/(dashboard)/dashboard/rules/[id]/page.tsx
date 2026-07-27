@@ -38,6 +38,7 @@ interface AnalysisRecord {
 const TYPE_LABELS: Record<string, string> = {
   analyze: "Full Analysis",
   enhance: "Enhancement",
+  post_enhance: "Analysis After Enhancement",
   generate: "Generation",
   feedback: "Quick Feedback",
 };
@@ -45,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   analyze: "text-primary",
   enhance: "text-accent",
+  post_enhance: "text-success",
   generate: "text-success",
   feedback: "text-severity-medium",
 };
@@ -586,7 +588,7 @@ export default function RuleDetailPage() {
           <div className="space-y-3">
             {analyses.map((a) => {
               const expanded = expandedAnalysis === a.id;
-              const isAnalyze = a.analysisType === "analyze";
+              const isAnalyze = a.analysisType === "analyze" || a.analysisType === "post_enhance";
               const isEnhance = a.analysisType === "enhance";
               const isFeedback = a.analysisType === "feedback";
               const isGenerate = a.analysisType === "generate";
