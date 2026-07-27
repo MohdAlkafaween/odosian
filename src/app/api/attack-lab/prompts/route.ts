@@ -5,7 +5,7 @@ import { errorResponse } from "@/lib/errors";
 import { z } from "zod/v4";
 import { validateRequest } from "@/lib/validation";
 
-export const GET = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+export const GET = requireRole("ADMIN")(async (request: AuthenticatedRequest) => {
   try {
     const url = new URL(request.url);
     const techniqueId = url.searchParams.get("techniqueId");

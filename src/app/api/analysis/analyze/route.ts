@@ -35,7 +35,7 @@ ${rule.query}`;
 }
 
 export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
-  requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+  requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest) => {
     try {
       const validated = await validateRequest(analyzeSchema, request);
       if ("error" in validated) return validated.error;

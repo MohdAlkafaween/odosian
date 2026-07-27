@@ -81,7 +81,7 @@ export default function ProfilePage() {
             </div>
             <div>
               <p className="text-xs text-text-muted mb-1">Role</p>
-              <Badge preset={user.role as "ADMIN" | "ANALYST"}>{user.role}</Badge>
+              <Badge preset={user.role as "ADMIN" | "DETECTION_ENG"}>{user.role === "DETECTION_ENG" ? "Detection Eng" : user.role}</Badge>
             </div>
             <div>
               <p className="text-xs text-text-muted mb-1">Email Verified</p>

@@ -29,7 +29,6 @@ interface RuleRow {
   status: string;
   ruleType: string;
   language: string;
-  client: string;
   category: string;
   covered: boolean;
   tags: string[];
@@ -90,16 +89,8 @@ const AI_FLAG_OPTIONS = [
   { value: "none", label: "No AI Activity" },
 ];
 
-const CLIENT_COLORS: Record<string, string> = {};
 const CATEGORY_COLORS: Record<string, string> = {};
 const PALETTE = ["#4CBDFA", "#A78BFA", "#34D399", "#FBBF24", "#FB7185", "#F97316", "#6ED1CA", "#E879F9"];
-function getClientColor(client: string): string {
-  if (!CLIENT_COLORS[client]) {
-    const idx = Object.keys(CLIENT_COLORS).length % PALETTE.length;
-    CLIENT_COLORS[client] = PALETTE[idx];
-  }
-  return CLIENT_COLORS[client];
-}
 function getCategoryColor(category: string): string {
   if (!CATEGORY_COLORS[category]) {
     const idx = Object.keys(CATEGORY_COLORS).length % PALETTE.length;
@@ -121,11 +112,6 @@ export default function RulesListPage() {
   const [status, setStatus] = useState("");
   const [ruleType, setRuleType] = useState("");
   const [language, setLanguage] = useState("");
-  const [client, setClient] = useState("");
-  const [clientOptions, setClientOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Clients" }]);
-  const [showAddClient, setShowAddClient] = useState(false);
-  const [newClientTag, setNewClientTag] = useState("");
-  const [addingClient, setAddingClient] = useState(false);
   const [category, setCategory] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Categories" }]);
   const [covered, setCovered] = useState("");
@@ -142,50 +128,6 @@ export default function RulesListPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; failed: number; errors: string[] } | null>(null);
-
-  const fetchClientOptions = useCallback(() => {
-    return fetch("/api/rules/clients")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.clients) {
-          setClientOptions([
-            { value: "", label: "All Clients" },
-            ...data.clients.map((c: string) => ({ value: c, label: c })),
-          ]);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    fetchClientOptions();
-  }, [fetchClientOptions]);
-
-  const addClientTag = async () => {
-    const name = newClientTag.trim();
-    if (!name) return;
-    setAddingClient(true);
-    try {
-      const res = await fetch("/api/rules/clients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name }),
-      });
-      if (res.ok) {
-        addToast("success", `Client tag "${name}" added`);
-        setNewClientTag("");
-        setShowAddClient(false);
-        fetchClientOptions();
-      } else {
-        const err = await res.json();
-        addToast("error", err.error || "Failed to add client tag");
-      }
-    } catch {
-      addToast("error", "Failed to add client tag");
-    } finally {
-      setAddingClient(false);
-    }
-  };
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -210,7 +152,6 @@ export default function RulesListPage() {
       if (status) params.set("status", status);
       if (ruleType) params.set("ruleType", ruleType);
       if (language) params.set("language", language);
-      if (client) params.set("client", client);
       if (category) params.set("category", category);
       if (covered) params.set("covered", covered);
 
@@ -226,7 +167,7 @@ export default function RulesListPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, severity, status, ruleType, language, client, category, covered, sortBy, sortDir, addToast]);
+  }, [page, search, severity, status, ruleType, language, category, covered, sortBy, sortDir, addToast]);
 
   const toggleCovered = async (rule: RuleRow) => {
     setTogglingCovered((prev) => new Set(prev).add(rule.id));
@@ -324,19 +265,6 @@ export default function RulesListPage() {
             {row.title}
           </Link>
           <div className="flex items-center gap-1.5 flex-wrap">
-            {row.client && (
-              <span
-                className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
-                style={{
-                  background: `${getClientColor(row.client)}15`,
-                  color: getClientColor(row.client),
-                  border: `1px solid ${getClientColor(row.client)}25`,
-                }}
-              >
-                <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" opacity="0.7"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                {row.client}
-              </span>
-            )}
             {row.category && (
               <span
                 className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
@@ -455,29 +383,6 @@ export default function RulesListPage() {
         </div>
         <Select value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} options={categoryOptions} />
         <Select value={covered} onChange={(e) => { setCovered(e.target.value); setPage(1); }} options={COVERED_OPTIONS} />
-        <Select value={client} onChange={(e) => { setClient(e.target.value); setPage(1); }} options={clientOptions} />
-        {showAddClient ? (
-          <div className="flex items-center gap-1">
-            <input
-              autoFocus
-              type="text"
-              value={newClientTag}
-              onChange={(e) => setNewClientTag(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") addClientTag();
-                if (e.key === "Escape") { setShowAddClient(false); setNewClientTag(""); }
-              }}
-              placeholder="New client tag"
-              className="px-3 py-1.5 bg-bg border border-border rounded-lg text-text text-sm w-36 focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <Button size="sm" onClick={addClientTag} loading={addingClient} disabled={!newClientTag.trim()}>Add</Button>
-            <Button size="sm" variant="ghost" onClick={() => { setShowAddClient(false); setNewClientTag(""); }}>Cancel</Button>
-          </div>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => setShowAddClient(true)} title="Add a custom client tag">
-            + Client Tag
-          </Button>
-        )}
         <Select value={severity} onChange={(e) => { setSeverity(e.target.value); setPage(1); }} options={SEVERITY_OPTIONS} />
         <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} options={STATUS_OPTIONS} />
         <Select value={ruleType} onChange={(e) => { setRuleType(e.target.value); setPage(1); }} options={TYPE_OPTIONS} />

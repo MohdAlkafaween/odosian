@@ -4,7 +4,7 @@ import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse } from "@/lib/errors";
 
-export const PATCH = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
+export const PATCH = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
 

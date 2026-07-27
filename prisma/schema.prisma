@@ -12,7 +12,7 @@ model User {
   email                    String    @unique
   name                     String
   password                 String
-  role                     String    @default("ANALYST")
+  role                     String    @default("DETECTION_ENG")
   isActive                 Boolean   @default(true)
   emailVerified            Boolean   @default(false)
   verificationToken        String?

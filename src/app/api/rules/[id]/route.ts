@@ -59,7 +59,7 @@ export const GET = authenticate(async (request: AuthenticatedRequest, context) =
   }
 });
 
-export const PUT = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
+export const PUT = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
 
@@ -142,7 +142,7 @@ export const PUT = requireRole("ANALYST", "ADMIN")(async (request: Authenticated
   }
 });
 
-export const DELETE = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
+export const DELETE = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
 

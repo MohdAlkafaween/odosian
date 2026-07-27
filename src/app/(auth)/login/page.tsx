@@ -98,9 +98,7 @@ export default function LoginPage() {
         <Link href="/forgot-password" className="text-primary hover:underline">
           Forgot password?
         </Link>
-        <Link href="/register" className="text-primary hover:underline">
-          Join the wall &rarr;
-        </Link>
+        <span className="text-text-muted">Contact admin for access</span>
       </div>
     </div>
   );

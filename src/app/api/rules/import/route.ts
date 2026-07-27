@@ -9,7 +9,7 @@ import { deriveRequiredFields } from "@/lib/required-fields";
 
 const MAX_IMPORT = 100;
 
-export const POST = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest) => {
   try {
     const contentType = request.headers.get("content-type") || "";
     let rawRules: unknown[];

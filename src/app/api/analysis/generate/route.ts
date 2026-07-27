@@ -9,7 +9,7 @@ import { errorResponse, aiErrorResponse } from "@/lib/errors";
 const AI_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_AI || "10");
 
 export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
-  requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+  requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest) => {
     try {
       const validated = await validateRequest(generateSchema, request);
       if ("error" in validated) return validated.error;

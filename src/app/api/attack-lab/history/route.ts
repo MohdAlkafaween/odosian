@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 
-export const GET = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+export const GET = requireRole("ADMIN")(async (request: AuthenticatedRequest) => {
   try {
     const url = new URL(request.url);
     const page = Math.max(1, parseInt(url.searchParams.get("page") || "1"));

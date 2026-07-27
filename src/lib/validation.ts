@@ -140,7 +140,7 @@ export const promptUpdateSchema = z.object({
 });
 
 export const userUpdateSchema = z.object({
-  role: z.enum(["ADMIN", "ANALYST"]).optional(),
+  role: z.enum(["ADMIN", "DETECTION_ENG"]).optional(),
   isActive: z.boolean().optional(),
 });
 

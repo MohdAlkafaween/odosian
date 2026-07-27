@@ -58,6 +58,7 @@ const navItems: NavItem[] = [
   {
     label: "Attack Lab",
     href: "/dashboard/attack-lab",
+    adminOnly: true,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" />
@@ -82,6 +83,7 @@ const navItems: NavItem[] = [
   {
     label: "Audit Logs",
     href: "/dashboard/audit",
+    adminOnly: true,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -105,6 +107,7 @@ const navItems: NavItem[] = [
   {
     label: "Settings",
     href: "/dashboard/settings",
+    adminOnly: true,
     icon: (
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="3" />

@@ -24,7 +24,7 @@ interface ApplyEnhancementBody {
 // "generated") get "#odosian " prepended to their title here, once, marking
 // them as AI-authored content that's been through a human-reviewed
 // enhancement pass rather than pushed to Elastic untouched.
-export const POST = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
+export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
 

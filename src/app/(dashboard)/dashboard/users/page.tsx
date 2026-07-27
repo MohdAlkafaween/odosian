@@ -31,7 +31,7 @@ interface UserRow {
 const ROLE_OPTIONS = [
   { value: "", label: "All Roles" },
   { value: "ADMIN", label: "Admin" },
-  { value: "ANALYST", label: "Analyst" },
+  { value: "DETECTION_ENG", label: "Detection Engineer" },
 ];
 
 const STATUS_OPTIONS = [
@@ -39,6 +39,12 @@ const STATUS_OPTIONS = [
   { value: "active", label: "Active" },
   { value: "inactive", label: "Inactive" },
 ];
+
+const ROLE_DISPLAY: Record<string, string> = {
+  ADMIN: "Admin",
+  DETECTION_ENG: "Detection Eng",
+  ANALYST: "Analyst",
+};
 
 export default function UsersPage() {
   const router = useRouter();
@@ -54,6 +60,13 @@ export default function UsersPage() {
   const [status, setStatus] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [showCreate, setShowCreate] = useState(false);
+  const [createName, setCreateName] = useState("");
+  const [createEmail, setCreateEmail] = useState("");
+  const [createPassword, setCreatePassword] = useState("");
+  const [createRole, setCreateRole] = useState("DETECTION_ENG");
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     if (currentUser && currentUser.role !== "ADMIN") {
@@ -86,15 +99,51 @@ export default function UsersPage() {
     if (currentUser?.role === "ADMIN") fetchUsers();
   }, [fetchUsers, currentUser]);
 
+  const handleCreateAccount = async () => {
+    if (!createName.trim() || !createEmail.trim() || !createPassword.trim()) {
+      addToast("error", "All fields are required");
+      return;
+    }
+    setCreating(true);
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: createName.trim(),
+          email: createEmail.trim(),
+          password: createPassword,
+          role: createRole,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", `Account created for ${createName.trim()}`);
+        setShowCreate(false);
+        setCreateName("");
+        setCreateEmail("");
+        setCreatePassword("");
+        setCreateRole("DETECTION_ENG");
+        fetchUsers();
+      } else {
+        addToast("error", data.error || "Failed to create account");
+      }
+    } catch {
+      addToast("error", "Failed to create account");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleToggleRole = async (u: UserRow) => {
-    const newRole = u.role === "ADMIN" ? "ANALYST" : "ADMIN";
+    const newRole = u.role === "ADMIN" ? "DETECTION_ENG" : "ADMIN";
     const res = await fetch(`/api/users/${u.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role: newRole }),
     });
     if (res.ok) {
-      addToast("success", `Role changed to ${newRole}`);
+      addToast("success", `Role changed to ${ROLE_DISPLAY[newRole] || newRole}`);
       fetchUsers();
     } else {
       const err = await res.json();
@@ -167,7 +216,11 @@ export default function UsersPage() {
       header: "Role",
       render: (row: Record<string, unknown>) => {
         const u = row as unknown as UserRow;
-        return <Badge preset={u.role === "ADMIN" ? "critical" : "info"}>{u.role}</Badge>;
+        return (
+          <Badge preset={u.role as "ADMIN" | "DETECTION_ENG"}>
+            {ROLE_DISPLAY[u.role] || u.role}
+          </Badge>
+        );
       },
     },
     {
@@ -228,6 +281,7 @@ export default function UsersPage() {
           <h1 className="text-[28px] font-extrabold text-text">Shield Defenders</h1>
           <p className="text-sm text-text-secondary mt-1">Manage platform users and their roles</p>
         </div>
+        <Button onClick={() => setShowCreate(true)}>Create Account</Button>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -253,6 +307,65 @@ export default function UsersPage() {
             <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
           </div>
         </>
+      )}
+
+      {showCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-surface border border-border rounded-xl shadow-xl p-6 w-full max-w-md animate-fade-in">
+            <h2 className="text-lg font-semibold text-text mb-4">Create Account</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  placeholder="e.g. John Smith"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Email</label>
+                <input
+                  type="email"
+                  value={createEmail}
+                  onChange={(e) => setCreateEmail(e.target.value)}
+                  placeholder="e.g. john@odosian.com"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Password</label>
+                <input
+                  type="password"
+                  value={createPassword}
+                  onChange={(e) => setCreatePassword(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text-secondary mb-1">Role</label>
+                <select
+                  value={createRole}
+                  onChange={(e) => setCreateRole(e.target.value)}
+                  className="w-full px-3 py-2 bg-bg border border-border rounded-lg text-text text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                >
+                  <option value="DETECTION_ENG">Detection Engineer</option>
+                  <option value="ADMIN">Admin (Senior / Team Lead)</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 mt-6">
+              <Button variant="ghost" onClick={() => { setShowCreate(false); setCreateName(""); setCreateEmail(""); setCreatePassword(""); setCreateRole("DETECTION_ENG"); }}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreateAccount} loading={creating}>
+                Create Account
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmDialog

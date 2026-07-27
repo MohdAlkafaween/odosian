@@ -146,7 +146,7 @@ async function disableOldRule(
   }
 }
 
-export const POST = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest, context) => {
+export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, context) => {
   try {
     const { id } = await context.params as { id: string };
     const body = await request.json();

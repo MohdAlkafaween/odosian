@@ -27,7 +27,7 @@ export interface SimulationResult {
 }
 
 export const POST = rateLimit("attack-lab", AI_RATE_LIMIT)(
-  requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+  requireRole("ADMIN")(async (request: AuthenticatedRequest) => {
     try {
       const validated = await validateRequest(simulateSchema, request);
       if ("error" in validated) return validated.error;

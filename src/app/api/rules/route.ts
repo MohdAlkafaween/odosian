@@ -111,7 +111,7 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
   }
 });
 
-export const POST = requireRole("ANALYST", "ADMIN")(async (request: AuthenticatedRequest) => {
+export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest) => {
   try {
     const validated = await validateRequest(ruleCreateSchema, request);
     if ("error" in validated) return validated.error;
