@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,17 @@ const LANG_OPTIONS = [
   { value: "esql", label: "ES|QL" },
 ];
 
+const AI_FLAG_OPTIONS = [
+  { value: "", label: "All AI Flags" },
+  { value: "analyzed", label: "Analyzed" },
+  { value: "enhanced", label: "Enhanced" },
+  { value: "deployed", label: "Deployed" },
+  { value: "covered", label: "Covered" },
+  { value: "feedback", label: "QF (Feedback)" },
+  { value: "generated", label: "Generated" },
+  { value: "none", label: "No AI Activity" },
+];
+
 const CLIENT_COLORS: Record<string, string> = {};
 const CATEGORY_COLORS: Record<string, string> = {};
 const PALETTE = ["#4CBDFA", "#A78BFA", "#34D399", "#FBBF24", "#FB7185", "#F97316", "#6ED1CA", "#E879F9"];
@@ -125,6 +136,7 @@ export default function RulesListPage() {
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [aiFlag, setAiFlag] = useState("");
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
@@ -270,6 +282,16 @@ export default function RulesListPage() {
 
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+  const displayedRules = useMemo(() => {
+    if (!aiFlag) return rules;
+    return rules.filter((r) => {
+      if (aiFlag === "covered") return r.covered;
+      if (!r.aiFlags) return aiFlag === "none";
+      if (aiFlag === "none") return !r.aiFlags.analyzed && !r.aiFlags.enhanced && !r.aiFlags.feedback && !r.aiFlags.generated && !r.aiFlags.deployed;
+      return r.aiFlags[aiFlag as keyof AIFlags];
+    });
+  }, [rules, aiFlag]);
 
   const columns = [
     {
@@ -460,6 +482,7 @@ export default function RulesListPage() {
         <Select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} options={STATUS_OPTIONS} />
         <Select value={ruleType} onChange={(e) => { setRuleType(e.target.value); setPage(1); }} options={TYPE_OPTIONS} />
         <Select value={language} onChange={(e) => { setLanguage(e.target.value); setPage(1); }} options={LANG_OPTIONS} />
+        <Select value={aiFlag} onChange={(e) => { setAiFlag(e.target.value); setPage(1); }} options={AI_FLAG_OPTIONS} />
         {selectedKeys.size > 0 && (
           <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
             Delete ({selectedKeys.size})
@@ -469,18 +492,18 @@ export default function RulesListPage() {
 
       {loading ? (
         <PageLoader />
-      ) : rules.length === 0 ? (
+      ) : displayedRules.length === 0 ? (
         <EmptyState
           title="No detection rules found"
-          description={search || severity || status ? "Try adjusting your filters" : "Create your first detection rule to get started"}
-          actionLabel={!search && !severity && !status ? "Create Rule" : undefined}
-          onAction={!search && !severity && !status ? () => router.push("/dashboard/rules/new") : undefined}
+          description={search || severity || status || aiFlag ? "Try adjusting your filters" : "Create your first detection rule to get started"}
+          actionLabel={!search && !severity && !status && !aiFlag ? "Create Rule" : undefined}
+          onAction={!search && !severity && !status && !aiFlag ? () => router.push("/dashboard/rules/new") : undefined}
         />
       ) : (
         <>
           <DataTable
             columns={columns}
-            data={rules}
+            data={displayedRules}
             keyField="id"
             selectable
             selectedKeys={selectedKeys}
