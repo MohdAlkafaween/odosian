@@ -17,7 +17,6 @@ const ITEMS: PaletteItem[] = [
   { label: "Detection Rules", href: "/dashboard/rules", section: "Navigation", keywords: "rules list" },
   { label: "Shield Categories", href: "/dashboard/projects", section: "Navigation", keywords: "project category categories" },
   { label: "AI Analysis", href: "/dashboard/analysis", section: "Navigation", keywords: "analyze score" },
-  { label: "Templates", href: "/dashboard/templates", section: "Navigation", keywords: "template" },
   { label: "MITRE ATT&CK", href: "/dashboard/mitre", section: "Navigation", keywords: "mitre tactics techniques" },
   { label: "Audit Logs", href: "/dashboard/audit", section: "Navigation", keywords: "audit log" },
   { label: "Users", href: "/dashboard/users", section: "Navigation", keywords: "user manage", adminOnly: true },

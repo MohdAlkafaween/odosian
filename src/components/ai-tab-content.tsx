@@ -359,12 +359,12 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
         {result.inputQuery && (
           <div>
             <h3 className="text-sm font-medium text-text-secondary mb-2">Original Query</h3>
-            <CodeBlock code={result.inputQuery} language="kuery" />
+            <CodeBlock code={result.inputQuery} language="kuery" formatQuery />
           </div>
         )}
         <div>
           <h3 className="text-sm font-medium text-success mb-2">Enhanced Query</h3>
-          <CodeBlock code={result.enhancedQuery} language="kuery" />
+          <CodeBlock code={result.enhancedQuery} language="kuery" formatQuery />
         </div>
       </div>
 
@@ -393,41 +393,127 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
       )}
 
       {postAnalysisResult && (
-        <Card>
-          <CardHeader><h3 className="font-semibold text-success">Analysis After Enhancement</h3></CardHeader>
-          <CardBody className="space-y-4">
-            <div className="flex items-center gap-5">
-              <ScoreGauge score={postAnalysisResult.score} size={80} label="Score" />
-              {postAnalysisResult.rating && <Badge preset={postAnalysisResult.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{postAnalysisResult.rating}</Badge>}
-            </div>
-            {postAnalysisResult.feedback && (
+        <>
+          <div className="border-t-2 border-primary/30 pt-6 mt-8">
+            <h2 className="text-lg font-bold text-text mb-6 flex items-center gap-2">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-success"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>
+              Post-Enhancement Analysis Report
+            </h2>
+
+            <div className="flex items-center gap-6 mb-6">
+              <ScoreGauge score={postAnalysisResult.score} size={100} label="Enhanced Score" />
               <div>
-                <p className="text-xs font-semibold text-text-muted mb-1.5">Assessment</p>
-                <p className="text-sm text-text-secondary whitespace-pre-wrap">{postAnalysisResult.feedback}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  {postAnalysisResult.rating && <Badge preset={postAnalysisResult.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{postAnalysisResult.rating}</Badge>}
+                  {postAnalysisResult.fpRisk && (
+                    <Badge preset={postAnalysisResult.fpRisk === "high" ? "critical" : postAnalysisResult.fpRisk === "medium" ? "medium" : "low"}>
+                      FP Risk: {postAnalysisResult.fpRisk}
+                    </Badge>
+                  )}
+                </div>
               </div>
-            )}
-            {(postAnalysisResult.strengths?.length > 0 || postAnalysisResult.weaknesses?.length > 0) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {postAnalysisResult.strengths?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-success mb-1.5">Strengths</p>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader><h3 className="text-lg font-semibold text-text">Assessment</h3></CardHeader>
+            <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{postAnalysisResult.feedback}</p></CardBody>
+          </Card>
+
+          {(postAnalysisResult.strengths?.length > 0 || postAnalysisResult.weaknesses?.length > 0) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {postAnalysisResult.strengths?.length > 0 && (
+                <Card>
+                  <CardHeader><h3 className="font-semibold text-success">Strengths</h3></CardHeader>
+                  <CardBody>
                     <ul className="space-y-1">
                       {postAnalysisResult.strengths.map((s: string, i: number) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-success shrink-0">&#10003;</span>{s}</li>)}
                     </ul>
-                  </div>
-                )}
-                {postAnalysisResult.weaknesses?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-danger mb-1.5">Remaining Weaknesses</p>
+                  </CardBody>
+                </Card>
+              )}
+              {postAnalysisResult.weaknesses?.length > 0 && (
+                <Card>
+                  <CardHeader><h3 className="font-semibold text-danger">Remaining Weaknesses</h3></CardHeader>
+                  <CardBody>
                     <ul className="space-y-1">
                       {postAnalysisResult.weaknesses.map((w: string, i: number) => <li key={i} className="text-sm text-text-secondary flex gap-2"><span className="text-danger shrink-0">&#10007;</span>{w}</li>)}
                     </ul>
+                  </CardBody>
+                </Card>
+              )}
+            </div>
+          )}
+
+          {postAnalysisResult.findings?.length > 0 && (
+            <Card>
+              <CardHeader><h3 className="text-lg font-semibold text-text">Findings ({postAnalysisResult.findings.length})</h3></CardHeader>
+              <CardBody className="space-y-3">
+                {postAnalysisResult.findings.map((f: AnalyzeResult["findings"][number], i: number) => (
+                  <div key={i} className="bg-bg rounded-lg p-4 border border-border">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge preset={f.severity as "critical" | "high" | "medium" | "low"} />
+                      <Badge preset="info">{f.category}</Badge>
+                      <span className="text-sm font-medium text-text">{f.title}</span>
+                    </div>
+                    <p className="text-sm text-text-secondary">{f.detail}</p>
                   </div>
-                )}
-              </div>
-            )}
-          </CardBody>
-        </Card>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {postAnalysisResult.suggestions?.length > 0 && (
+            <Card>
+              <CardHeader><h3 className="text-lg font-semibold text-text">Suggestions</h3></CardHeader>
+              <CardBody className="space-y-4">
+                {postAnalysisResult.suggestions.sort((a: AnalyzeResult["suggestions"][number], b: AnalyzeResult["suggestions"][number]) => a.priority - b.priority).map((s: AnalyzeResult["suggestions"][number], i: number) => (
+                  <div key={i} className="border-b border-border last:border-0 pb-4 last:pb-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded">P{s.priority}</span>
+                      <span className="text-sm font-medium text-text">{s.title}</span>
+                    </div>
+                    <p className="text-sm text-text-secondary mb-2">{s.description}</p>
+                    {s.codeSnippet && <CodeBlock code={s.codeSnippet} language="kuery" maxHeight="200px" formatQuery />}
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {postAnalysisResult.evasionRisks?.length > 0 && (
+            <Card>
+              <CardHeader><h3 className="text-lg font-semibold text-text">Evasion Risks</h3></CardHeader>
+              <CardBody className="space-y-3">
+                {postAnalysisResult.evasionRisks.map((e: AnalyzeResult["evasionRisks"][number], i: number) => (
+                  <div key={i} className="bg-bg rounded-lg p-4 border border-border">
+                    <p className="text-sm font-medium text-warning mb-1">{e.technique}</p>
+                    <p className="text-sm text-text-secondary mb-2">{e.description}</p>
+                    <p className="text-sm text-success"><span className="font-medium">Mitigation:</span> {e.mitigation}</p>
+                  </div>
+                ))}
+              </CardBody>
+            </Card>
+          )}
+
+          {result.inputQuery && (
+            <Card>
+              <CardHeader><h3 className="text-lg font-semibold text-text">Query Comparison</h3></CardHeader>
+              <CardBody>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs font-semibold text-text-muted mb-2 uppercase tracking-wide">Before Enhancement</p>
+                    <CodeBlock code={result.inputQuery} language="kuery" formatQuery />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-success mb-2 uppercase tracking-wide">After Enhancement</p>
+                    <CodeBlock code={result.enhancedQuery} language="kuery" formatQuery />
+                  </div>
+                </div>
+              </CardBody>
+            </Card>
+          )}
+        </>
       )}
     </div>
   );

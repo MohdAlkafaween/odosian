@@ -6,17 +6,28 @@ interface CodeBlockProps {
   code: string;
   language?: string;
   maxHeight?: string;
+  formatQuery?: boolean;
+}
+
+function formatDetectionQuery(code: string): string {
+  if (!code || code.length < 40) return code;
+  return code
+    .replace(/\s+(and|or|not)\s+/gi, (_, kw) => `\n  ${kw} `)
+    .replace(/\s*\|\s*/g, "\n| ")
+    .replace(/\s*(from|where|stats|eval|keep|drop|sort|limit|rename|dissect|grok|enrich|mv_expand)\s+/gi, (_, kw) => `\n${kw} `);
 }
 
 export function CodeBlock({
   code,
   language = "yaml",
   maxHeight = "400px",
+  formatQuery = false,
 }: CodeBlockProps) {
+  const displayCode = formatQuery ? formatDetectionQuery(code) : code;
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(code);
+    await navigator.clipboard.writeText(displayCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -36,7 +47,7 @@ export function CodeBlock({
         className="p-4 overflow-auto font-mono text-sm text-text"
         style={{ maxHeight }}
       >
-        <code>{code}</code>
+        <code>{displayCode}</code>
       </pre>
     </div>
   );
