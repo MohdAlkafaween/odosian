@@ -1,10 +1,16 @@
 #!/bin/sh
 set -e
 
-# Run migrations and seed on first start (when DB doesn't exist yet)
+FIRST_START=0
 if [ ! -f /data/odosian.db ]; then
-  echo "Initializing database..."
-  npx prisma db push --schema=prisma/schema.prisma
+  FIRST_START=1
+fi
+
+echo "Syncing database schema..."
+npx prisma db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate
+
+if [ "$FIRST_START" = "1" ]; then
+  echo "Seeding database..."
   npx prisma db seed
   echo "Database initialized."
 fi
