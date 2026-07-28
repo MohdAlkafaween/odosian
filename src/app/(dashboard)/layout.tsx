@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { AuthGuard } from "@/components/auth-guard";
 import { Sidebar } from "@/components/sidebar";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
@@ -29,9 +29,15 @@ export default function DashboardLayout({
   const { addToast } = useToastStore();
   const { initTheme } = useThemeStore();
   const activeTabId = useTabStore((s) => s.activeTabId);
+  const setActiveTab = useTabStore((s) => s.setActiveTab);
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => { initTheme(); }, [initTheme]);
+
+  useEffect(() => {
+    setActiveTab(null);
+  }, [pathname, setActiveTab]);
 
   const handleLogout = async () => {
     try {

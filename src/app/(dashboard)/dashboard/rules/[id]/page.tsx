@@ -12,6 +12,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { useTabStore } from "@/stores/tabs";
 import { VersionHistory } from "@/components/version-history";
 import { CommentsSection } from "@/components/comments-section";
 
@@ -222,6 +223,33 @@ export default function RuleDetailPage() {
     }
   };
 
+  const { addTab, updateTab, setActiveTab } = useTabStore();
+
+  const handleSimulate = async () => {
+    if (!rule) return;
+    const tabId = addTab({
+      type: "simulate",
+      title: `Simulate: ${rule.title}`,
+      ruleId: rule.id,
+      ruleName: rule.title,
+      status: "running",
+      statusMessage: "Generating attack simulation from rule fields...",
+    });
+
+    try {
+      const res = await fetch(`/api/rules/${rule.id}/simulate`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tabId, { status: "completed", result: data.simulation });
+        setActiveTab(tabId);
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Simulation failed" });
+      }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+    }
+  };
+
   const openElasticPush = async () => {
     try {
       const res = await fetch("/api/elastic");
@@ -320,6 +348,21 @@ export default function RuleDetailPage() {
             <span className="flex items-center gap-1.5">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14" /><path d="M17 8l4 4-4 4" /></svg>
               {rule.elasticRuleId ? "Update in Elastic" : "Push to Elastic"}
+            </span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSimulate}
+          >
+            <span className="flex items-center gap-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" />
+                <line x1="12" y1="2" x2="12" y2="5" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+              </svg>
+              Simulate
             </span>
           </Button>
           <Button

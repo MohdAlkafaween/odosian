@@ -1,6 +1,6 @@
 "use client";
 
-import { useTabStore, type AITab, type TabType } from "@/stores/tabs";
+import { useTabStore, type AITab, type TabType, type SimulateResult } from "@/stores/tabs";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -16,6 +16,15 @@ const TYPE_LABELS: Record<TabType, string> = {
   enhance: "Enhancement",
   generate: "Generation",
   feedback: "Quick Feedback",
+  simulate: "Attack Simulation",
+};
+
+const TYPE_BADGE_PRESET: Record<TabType, string> = {
+  analyze: "analyzed",
+  enhance: "enhanced",
+  generate: "generated",
+  feedback: "qf",
+  simulate: "critical",
 };
 
 export function AITabContent() {
@@ -30,7 +39,7 @@ export function AITabContent() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Badge preset={activeTab.type === "analyze" ? "analyzed" : activeTab.type === "enhance" ? "enhanced" : activeTab.type === "generate" ? "generated" : "qf"}>
+              <Badge preset={TYPE_BADGE_PRESET[activeTab.type] as "analyzed" | "enhanced" | "generated" | "qf" | "critical"}>
                 {TYPE_LABELS[activeTab.type]}
               </Badge>
               {activeTab.status === "running" && <Badge preset="draft">Running</Badge>}
@@ -45,11 +54,9 @@ export function AITabContent() {
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => {
-              setActiveTab(null);
-            }}
+            onClick={() => setActiveTab(null)}
           >
-            Back to page
+            Close Tab View
           </Button>
         </div>
 
@@ -86,6 +93,9 @@ export function AITabContent() {
             )}
             {activeTab.type === "feedback" && (
               <TabFeedbackResults result={activeTab.result as FeedbackResult} />
+            )}
+            {activeTab.type === "simulate" && (
+              <TabSimulateResults result={activeTab.result as SimulateResult} />
             )}
           </>
         )}
@@ -495,6 +505,93 @@ function TabFeedbackResults({ result }: { result: FeedbackResult }) {
           </Card>
         )}
       </div>
+    </div>
+  );
+}
+
+function TabSimulateResults({ result }: { result: SimulateResult }) {
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader><h3 className="text-lg font-semibold text-text">Scenario</h3></CardHeader>
+        <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.scenario}</p></CardBody>
+      </Card>
+
+      {result.prerequisites?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-text">Prerequisites</h3></CardHeader>
+          <CardBody>
+            <ul className="space-y-1">
+              {result.prerequisites.map((p, i) => (
+                <li key={i} className="text-sm text-text-secondary flex gap-2">
+                  <span className="text-primary shrink-0">-</span>{p}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
+      {result.steps?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-text">Simulation Steps ({result.steps.length})</h3></CardHeader>
+          <CardBody className="space-y-4">
+            {result.steps.map((step, i) => (
+              <div key={i} className="bg-bg rounded-lg p-4 border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs font-bold text-bg bg-primary px-2 py-0.5 rounded">Step {step.stepNumber}</span>
+                  <span className="text-sm font-medium text-text">{step.action}</span>
+                </div>
+                {step.command && <CodeBlock code={step.command} language="bash" />}
+                {step.expectedOutput && (
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-text-muted mb-1">Expected Output</p>
+                    <p className="text-xs text-text-secondary bg-surface-light rounded px-3 py-2 font-mono whitespace-pre-wrap">{step.expectedOutput}</p>
+                  </div>
+                )}
+                {step.notes && <p className="text-xs text-text-muted mt-2 italic">{step.notes}</p>}
+              </div>
+            ))}
+          </CardBody>
+        </Card>
+      )}
+
+      {result.expectedAlerts?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-success">Expected Alerts</h3></CardHeader>
+          <CardBody>
+            <ul className="space-y-1">
+              {result.expectedAlerts.map((a, i) => (
+                <li key={i} className="text-sm text-text-secondary flex gap-2">
+                  <span className="text-success shrink-0">&#10003;</span>{a}
+                </li>
+              ))}
+            </ul>
+          </CardBody>
+        </Card>
+      )}
+
+      {result.validationSteps?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-accent">Validation Steps</h3></CardHeader>
+          <CardBody>
+            <ol className="space-y-1 list-decimal list-inside">
+              {result.validationSteps.map((v, i) => <li key={i} className="text-sm text-text-secondary">{v}</li>)}
+            </ol>
+          </CardBody>
+        </Card>
+      )}
+
+      {result.cleanupCommands?.length > 0 && (
+        <Card>
+          <CardHeader><h3 className="font-semibold text-warning">Cleanup Commands</h3></CardHeader>
+          <CardBody className="space-y-2">
+            {result.cleanupCommands.map((cmd, i) => (
+              <CodeBlock key={i} code={cmd} language="bash" />
+            ))}
+          </CardBody>
+        </Card>
+      )}
     </div>
   );
 }

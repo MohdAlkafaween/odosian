@@ -50,17 +50,6 @@ interface PromptItem {
   version: number;
 }
 
-interface KaliConnection {
-  id: string;
-  name: string;
-  host: string;
-  port: number;
-  username: string;
-  authType: string;
-  isActive: boolean;
-  lastUsed: string | null;
-}
-
 interface ElasticConnection {
   id: string;
   name: string;
@@ -163,9 +152,7 @@ export default function SettingsPage() {
   const [editingPrompt, setEditingPrompt] = useState<PromptItem | null>(null);
   const [savingProvider, setSavingProvider] = useState(false);
   const [savingPrompt, setSavingPrompt] = useState(false);
-  const [kaliConnections, setKaliConnections] = useState<KaliConnection[]>([]);
-  const [editingKali, setEditingKali] = useState<Partial<KaliConnection> | null>(null);
-  const [savingKali, setSavingKali] = useState(false);
+
   const [testingProvider, setTestingProvider] = useState(false);
   const [elasticConnections, setElasticConnections] = useState<ElasticConnection[]>([]);
   const [editingElastic, setEditingElastic] = useState<Partial<ElasticConnection & { apiKey?: string }> | null>(null);
@@ -175,9 +162,8 @@ export default function SettingsPage() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const [settingsRes, kaliRes, elasticRes] = await Promise.all([
+      const [settingsRes, elasticRes] = await Promise.all([
         fetch("/api/settings"),
-        fetch("/api/attack-lab/kali/settings"),
         fetch("/api/elastic"),
       ]);
       if (settingsRes.status === 403) { setLoading(false); return; }
@@ -185,10 +171,6 @@ export default function SettingsPage() {
       setSettings(data.settings || {});
       setProviders(data.providers || []);
       setPrompts(data.prompts || []);
-      if (kaliRes.ok) {
-        const kaliData = await kaliRes.json();
-        setKaliConnections(kaliData.connections || []);
-      }
       if (elasticRes.ok) {
         const elasticData = await elasticRes.json();
         setElasticConnections(elasticData.connections || []);
@@ -292,23 +274,6 @@ export default function SettingsPage() {
       fetchSettings();
     } catch { addToast("error", "Failed to update prompt"); }
     finally { setSavingPrompt(false); }
-  };
-
-  const saveKali = async () => {
-    if (!editingKali || !editingKali.host) return;
-    setSavingKali(true);
-    try {
-      const res = await fetch("/api/attack-lab/kali/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingKali),
-      });
-      if (!res.ok) { const d = await res.json(); addToast("error", d.error || "Failed"); return; }
-      addToast("success", editingKali.id ? "Connection updated" : "Connection created");
-      setEditingKali(null);
-      fetchSettings();
-    } catch { addToast("error", "Failed to save connection"); }
-    finally { setSavingKali(false); }
   };
 
   const saveElastic = async () => {
@@ -744,67 +709,6 @@ export default function SettingsPage() {
                   </CardBody>
                 </Card>
 
-                {/* Kali Connections */}
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <h2 className="font-semibold text-text">Kali Linux Connections</h2>
-                      <Button size="sm" onClick={() => setEditingKali({ name: "", host: "", port: 22, username: "kali", authType: "password", isActive: true })}>
-                        Add Connection
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardBody className="space-y-3">
-                    <p className="text-xs text-text-muted mb-2">
-                      Configure SSH connections to Kali Linux machines for the Attack Simulation Lab.
-                    </p>
-
-                    {editingKali && (
-                      <div className="bg-surface-light border border-primary/30 rounded-lg p-4 space-y-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="text-sm font-semibold text-text">
-                            {editingKali.id ? "Edit Connection" : "New Connection"}
-                          </h3>
-                          <div className="flex gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => setEditingKali(null)}>Cancel</Button>
-                            <Button size="sm" onClick={saveKali} loading={savingKali}>Save</Button>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <Input label="Name" value={editingKali.name || ""} onChange={(e) => setEditingKali({ ...editingKali, name: e.target.value })} placeholder="My Kali Lab" />
-                          <Input label="Host" value={editingKali.host || ""} onChange={(e) => setEditingKali({ ...editingKali, host: e.target.value })} placeholder="192.168.1.100" />
-                          <Input label="Port" type="number" value={String(editingKali.port || 22)} onChange={(e) => setEditingKali({ ...editingKali, port: parseInt(e.target.value) || 22 })} />
-                          <Input label="Username" value={editingKali.username || "kali"} onChange={(e) => setEditingKali({ ...editingKali, username: e.target.value })} />
-                        </div>
-                        <div className="flex gap-4">
-                          <label className="flex items-center gap-2 text-sm text-text">
-                            <input type="checkbox" checked={editingKali.isActive !== false} onChange={(e) => setEditingKali({ ...editingKali, isActive: e.target.checked })} className="accent-primary" />
-                            Active
-                          </label>
-                        </div>
-                      </div>
-                    )}
-
-                    {kaliConnections.length === 0 && !editingKali && (
-                      <p className="text-sm text-text-muted text-center py-4">No Kali connections configured. Add one to use the Attack Simulation Lab.</p>
-                    )}
-
-                    {kaliConnections.map((c) => (
-                      <div key={c.id} className="flex items-center justify-between bg-surface-light rounded-lg px-4 py-3 border border-border">
-                        <div>
-                          <div className="flex items-center gap-2 mb-0.5">
-                            <span className="text-sm font-medium text-text">{c.name}</span>
-                            <Badge preset={c.isActive ? "reviewed" : "deprecated"}>
-                              {c.isActive ? "Active" : "Inactive"}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-text-muted font-mono">{c.username}@{c.host}:{c.port}</p>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => setEditingKali({ ...c })}>Edit</Button>
-                      </div>
-                    ))}
-                  </CardBody>
-                </Card>
               </div>
             )}
 
