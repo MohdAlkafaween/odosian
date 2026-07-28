@@ -7,7 +7,7 @@ if [ ! -f /data/odosian.db ]; then
 fi
 
 echo "Syncing database schema..."
-npx prisma db push --schema=prisma/schema.prisma --accept-data-loss --skip-generate
+npx prisma db push --schema=prisma/schema.prisma --accept-data-loss
 
 if [ "$FIRST_START" = "1" ]; then
   echo "Seeding database..."
