@@ -28,7 +28,8 @@ const TYPE_LABELS: Record<string, string> = {
   enhance: "Enhancement",
   post_enhance: "Post-Enhancement",
   generate: "Generation",
-  feedback: "Feedback",
+  feedback: "Simulation",
+  simulate: "Simulation",
 };
 
 export default function AnalysisHistoryPage() {
@@ -68,13 +69,16 @@ export default function AnalysisHistoryPage() {
       header: "Score",
       render: (r: Record<string, unknown>) => {
         const row = r as unknown as AnalysisRecord;
+        if (row.analysisType === "enhance" || !row.score) {
+          return <span className="text-text-muted">—</span>;
+        }
         return (
           <span className={`font-bold ${
-            (row.score || 0) >= 80 ? "text-success" :
-            (row.score || 0) >= 60 ? "text-info" :
-            (row.score || 0) >= 40 ? "text-warning" : "text-danger"
+            row.score >= 80 ? "text-success" :
+            row.score >= 60 ? "text-info" :
+            row.score >= 40 ? "text-warning" : "text-danger"
           }`}>
-            {row.score ?? "—"}
+            {row.score}
           </span>
         );
       },

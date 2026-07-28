@@ -76,9 +76,9 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: Authen
     if (body.newSeverity !== undefined) data.severity = body.newSeverity;
     if (body.newRiskScore !== undefined) data.riskScore = body.newRiskScore;
     if (body.investigationGuide !== undefined) data.investigationGuide = body.investigationGuide;
-    if (body.falsePositives !== undefined) data.falsePositives = JSON.stringify(body.falsePositives);
-    if (body.references !== undefined) data.references = JSON.stringify(body.references);
-    if (body.indexPatterns !== undefined) data.index = body.indexPatterns.join(", ");
+    if (body.falsePositives !== undefined) data.falsePositives = JSON.stringify(Array.isArray(body.falsePositives) ? body.falsePositives : []);
+    if (body.references !== undefined) data.references = JSON.stringify(Array.isArray(body.references) ? body.references : []);
+    if (body.indexPatterns !== undefined && Array.isArray(body.indexPatterns)) data.index = body.indexPatterns.join(", ");
 
     const rule = await prisma.rule.update({ where: { id }, data });
 

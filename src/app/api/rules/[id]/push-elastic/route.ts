@@ -274,9 +274,20 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
         );
       }
 
+      const analysisTypes = await prisma.analysis.findMany({
+        where: { ruleId: id },
+        select: { analysisType: true },
+        distinct: ["analysisType"],
+      });
+      const types = new Set(analysisTypes.map((a) => a.analysisType));
+      const autoCover = types.has("analyze") && types.has("enhance");
+
       await prisma.rule.update({
         where: { id },
-        data: { elasticRuleId },
+        data: {
+          elasticRuleId,
+          ...(autoCover ? { covered: true, coveredAt: new Date() } : {}),
+        },
       });
 
       logAudit({

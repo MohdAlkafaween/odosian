@@ -124,6 +124,32 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
       if (res.ok) {
         updateTab(tabId, { status: "completed", result: data.analysis });
         setActiveTab(tabId);
+      } else if (res.status === 400 && data.error?.includes("analyze the rule first")) {
+        addToast("info", "Rule not analyzed yet — running analysis first...");
+        updateTab(tabId, { statusMessage: "Step 1/2: Analyzing rule first..." });
+        const analyzeRes = await fetch("/api/analysis/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleId }),
+        });
+        if (!analyzeRes.ok) {
+          updateTab(tabId, { status: "failed", error: "Auto-analysis failed" });
+          return;
+        }
+        addToast("success", "Analysis complete. Now enhancing...");
+        updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
+        const retryRes = await fetch("/api/analysis/enhance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleId }),
+        });
+        const retryData = await retryRes.json();
+        if (retryRes.ok) {
+          updateTab(tabId, { status: "completed", result: retryData.analysis });
+          setActiveTab(tabId);
+        } else {
+          updateTab(tabId, { status: "failed", error: retryData.error || "Enhancement failed" });
+        }
       } else {
         updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
       }

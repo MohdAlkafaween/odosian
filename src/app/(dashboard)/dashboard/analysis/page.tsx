@@ -806,9 +806,7 @@ function EnhanceTab({ rules, addToast }: {
 }) {
   const [ruleId, setRuleId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [autoAnalyzing, setAutoAnalyzing] = useState(false);
   const [result, setResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
-  const [needsAnalysis, setNeedsAnalysis] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const { addTab, updateTab } = useTabStore();
 
@@ -818,7 +816,7 @@ function EnhanceTab({ rules, addToast }: {
     const tabId = addTab({ type: "enhance", title: `Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Enhancing rule..." });
     setLoading(true);
     setResult(null);
-    setNeedsAnalysis(false);
+
     setStatusMessage("Enhancing rule...");
     try {
       const res = await fetch("/api/analysis/enhance", {
@@ -829,12 +827,43 @@ function EnhanceTab({ rules, addToast }: {
       const data = await res.json();
       if (!res.ok) {
         if (res.status === 400 && data.error?.includes("analyze the rule first")) {
-          setNeedsAnalysis(true);
-          updateTab(tabId, { status: "failed", error: "Analysis required first" });
-        } else {
-          updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
-          addToast("error", data.error || "Enhancement failed");
+          addToast("info", "Rule not analyzed yet — running analysis first...");
+          setStatusMessage("Step 1/2: Analyzing rule first...");
+          updateTab(tabId, { statusMessage: "Step 1/2: Analyzing rule first..." });
+
+          const analyzeRes = await fetch("/api/analysis/analyze", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ruleId }),
+          });
+          if (!analyzeRes.ok) {
+            const aData = await analyzeRes.json();
+            updateTab(tabId, { status: "failed", error: aData.error || "Analysis failed" });
+            addToast("error", aData.error || "Auto-analysis failed");
+            return;
+          }
+          addToast("success", "Analysis complete. Now enhancing...");
+
+          setStatusMessage("Step 2/2: Enhancing rule...");
+          updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
+          const retryRes = await fetch("/api/analysis/enhance", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ruleId }),
+          });
+          const retryData = await retryRes.json();
+          if (!retryRes.ok) {
+            updateTab(tabId, { status: "failed", error: retryData.error || "Enhancement failed" });
+            addToast("error", retryData.error || "Enhancement failed");
+            return;
+          }
+          setResult(retryData.analysis);
+          updateTab(tabId, { status: "completed", result: retryData.analysis });
+          addToast("success", "Rule analyzed and enhanced successfully");
+          return;
         }
+        updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
+        addToast("error", data.error || "Enhancement failed");
         return;
       }
       setResult(data.analysis);
@@ -846,81 +875,19 @@ function EnhanceTab({ rules, addToast }: {
     finally { setLoading(false); setStatusMessage(""); }
   };
 
-  const handleAnalyzeAndEnhance = async () => {
-    if (!ruleId) { addToast("error", "Select a rule"); return; }
-    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
-    const tabId = addTab({ type: "enhance", title: `Analyze & Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Step 1/2: Analyzing rule..." });
-    setAutoAnalyzing(true);
-    setResult(null);
-    setNeedsAnalysis(false);
-    try {
-      setStatusMessage("Step 1/2: Analyzing rule...");
-      const analyzeRes = await fetch("/api/analysis/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId }),
-      });
-      if (!analyzeRes.ok) {
-        const data = await analyzeRes.json();
-        updateTab(tabId, { status: "failed", error: data.error || "Analysis failed" });
-        addToast("error", data.error || "Analysis failed");
-        return;
-      }
-      addToast("success", "Analysis complete. Now enhancing...");
-
-      setStatusMessage("Step 2/2: Enhancing rule...");
-      updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
-      const enhanceRes = await fetch("/api/analysis/enhance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId }),
-      });
-      const enhanceData = await enhanceRes.json();
-      if (!enhanceRes.ok) {
-        updateTab(tabId, { status: "failed", error: enhanceData.error || "Enhancement failed" });
-        addToast("error", enhanceData.error || "Enhancement failed");
-        return;
-      }
-      setResult(enhanceData.analysis);
-      setNeedsAnalysis(false);
-      updateTab(tabId, { status: "completed", result: enhanceData.analysis });
-      addToast("success", "Rule analyzed and enhanced successfully");
-    } catch {
-      updateTab(tabId, { status: "failed", error: "Analyze & Enhance failed" });
-      addToast("error", "Analyze & Enhance failed");
-    }
-    finally { setAutoAnalyzing(false); setStatusMessage(""); }
-  };
-
-  const isWorking = loading || autoAnalyzing;
-
   return (
     <div className="space-y-6">
       <Card>
         <CardBody className="space-y-4">
-          <RuleSelector rules={rules} selectedId={ruleId} onSelect={(id) => { setRuleId(id); setNeedsAnalysis(false); }} />
-          <p className="text-xs text-text-muted">The rule must have been analyzed first. Enhancement uses analysis findings to improve the rule.</p>
-          {needsAnalysis && (
-            <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 flex items-start gap-2">
-              <span className="text-warning text-lg shrink-0">!</span>
-              <div>
-                <p className="text-sm font-medium text-warning">Analysis Required</p>
-                <p className="text-xs text-text-secondary mt-0.5 mb-2">
-                  This rule hasn&apos;t been analyzed yet. You can analyze and enhance it in one step.
-                </p>
-                <Button onClick={handleAnalyzeAndEnhance} loading={autoAnalyzing} variant="accent" size="sm">
-                  {autoAnalyzing ? statusMessage : "Analyze & Enhance"}
-                </Button>
-              </div>
-            </div>
-          )}
-          <Button onClick={handleEnhance} loading={isWorking} disabled={isWorking} className="w-full">
-            {loading ? "Enhancing..." : "Enhance Rule"}
+          <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
+          <p className="text-xs text-text-muted">If the rule hasn&apos;t been analyzed yet, analysis runs automatically before enhancement.</p>
+          <Button onClick={handleEnhance} loading={loading} disabled={loading} className="w-full">
+            {loading ? (statusMessage || "Enhancing...") : "Enhance Rule"}
           </Button>
         </CardBody>
       </Card>
 
-      {isWorking && (
+      {loading && (
         <div className="flex flex-col items-center gap-3 py-12">
           <Spinner size="lg" />
           <p className="text-text-secondary text-sm">{statusMessage || "AI is enhancing the rule..."}</p>
