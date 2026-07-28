@@ -1,7 +1,7 @@
 import { create } from "zustand";
-import type { AnalyzeResult, EnhanceResult, GenerateResult, FeedbackResult } from "@/lib/ai";
+import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
-export type TabType = "analyze" | "enhance" | "generate" | "feedback" | "simulate";
+export type TabType = "analyze" | "enhance" | "generate" | "simulate";
 export type TabStatus = "running" | "completed" | "failed";
 
 export interface SimulateResult {
@@ -21,7 +21,7 @@ export interface AITab {
   ruleName?: string;
   status: TabStatus;
   statusMessage?: string;
-  result?: AnalyzeResult | (EnhanceResult & { inputQuery?: string }) | GenerateResult | FeedbackResult | SimulateResult;
+  result?: AnalyzeResult | (EnhanceResult & { inputQuery?: string }) | GenerateResult | SimulateResult;
   error?: string;
   createdAt: number;
 }

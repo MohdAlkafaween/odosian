@@ -78,24 +78,27 @@ export function requireRole(
   };
 }
 
+function getClientIpFromRequest(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "127.0.0.1"
+  );
+}
+
 export function rateLimit(
   endpoint: string,
   limit: number
 ): (handler: RouteHandler) => RouteHandler {
   return (handler: RouteHandler) => {
     return async (request: Request, context: RouteContext) => {
-      let userId = "anonymous";
-      const token = getTokenFromRequest(request);
-      if (token) {
-        const payload = await verifyToken(token);
-        if (payload) userId = payload.userId;
-      }
+      const clientIp = getClientIpFromRequest(request);
 
       const now = new Date();
       const windowStart = new Date(now.getTime() - 60_000);
 
       const existing = await prisma.rateLimit.findUnique({
-        where: { userId_endpoint: { userId, endpoint } },
+        where: { userId_endpoint: { userId: clientIp, endpoint } },
       });
 
       if (existing) {
@@ -119,7 +122,7 @@ export function rateLimit(
         }
       } else {
         await prisma.rateLimit.create({
-          data: { userId, endpoint, count: 1, windowStart: now },
+          data: { userId: clientIp, endpoint, count: 1, windowStart: now },
         });
       }
 

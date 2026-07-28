@@ -154,7 +154,7 @@ export default function AnalysisHistoryPage() {
                 { value: "enhance", label: "Enhancement" },
                 { value: "post_enhance", label: "Post-Enhancement" },
                 { value: "generate", label: "Generation" },
-                { value: "feedback", label: "Feedback" },
+                { value: "simulate", label: "Simulation" },
               ]}
             />
           </div>

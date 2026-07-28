@@ -15,7 +15,7 @@ import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
-import type { AnalyzeResult, EnhanceResult, GenerateResult, FeedbackResult } from "@/lib/ai";
+import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
 type ToastFn = (type: "success" | "error" | "info" | "warning", msg: string) => void;
 
@@ -59,7 +59,6 @@ function AnalysisContent() {
     { id: "analyze", label: "Analyze Rule" },
     { id: "enhance", label: "Enhance Rule" },
     { id: "generate", label: "Generate Rule" },
-    { id: "feedback", label: "Quick Feedback" },
   ];
 
   return (
@@ -91,9 +90,6 @@ function AnalysisContent() {
             )}
             {activeTab === "generate" && (
               <GenerateTab addToast={addToast} router={router} />
-            )}
-            {activeTab === "feedback" && (
-              <FeedbackTab rules={rules} addToast={addToast} />
             )}
           </>
         )}
@@ -985,141 +981,6 @@ function GenerateTab({ addToast, router }: {
               </CardBody>
             </Card>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FeedbackTab({ rules, addToast }: { rules: RuleOption[]; addToast: ToastFn }) {
-  const [query, setQuery] = useState("");
-  const [language, setLanguage] = useState("kuery");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<FeedbackResult | null>(null);
-  const [mode, setMode] = useState<"rule" | "query">("rule");
-  const [ruleId, setRuleId] = useState("");
-  const [fetchingQuery, setFetchingQuery] = useState(false);
-  const { addTab, updateTab } = useTabStore();
-
-  const runFeedback = async (feedbackQuery: string, feedbackLang: string, ruleName: string) => {
-    const tabId = addTab({ type: "feedback", title: `QF: ${ruleName}`, ruleId: mode === "rule" ? ruleId : undefined, ruleName, status: "running", statusMessage: "AI is reviewing the query..." });
-    setLoading(true);
-    setResult(null);
-    try {
-      const res = await fetch("/api/analysis/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: feedbackQuery, language: feedbackLang }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        updateTab(tabId, { status: "failed", error: data.error || "Feedback failed" });
-        addToast("error", data.error || "Feedback failed");
-        return;
-      }
-      setResult(data.analysis);
-      updateTab(tabId, { status: "completed", result: data.analysis });
-    } catch {
-      updateTab(tabId, { status: "failed", error: "Feedback failed" });
-      addToast("error", "Feedback failed");
-    }
-    finally { setLoading(false); }
-  };
-
-  const handleFeedback = async () => {
-    if (mode === "query") {
-      if (!query) { addToast("error", "Enter a query"); return; }
-      await runFeedback(query, language, "Raw Query");
-    } else {
-      if (!ruleId) { addToast("error", "Select a rule"); return; }
-      const rule = rules.find((r) => r.id === ruleId);
-      setFetchingQuery(true);
-      try {
-        const res = await fetch(`/api/rules/${ruleId}`);
-        const data = await res.json();
-        if (!res.ok) { addToast("error", "Failed to fetch rule"); return; }
-        const ruleQuery = data.rule?.query;
-        const ruleLang = data.rule?.language || "kuery";
-        if (!ruleQuery) { addToast("error", "Rule has no query"); return; }
-        await runFeedback(ruleQuery, ruleLang, rule?.title || "Rule");
-      } catch { addToast("error", "Failed to fetch rule"); }
-      finally { setFetchingQuery(false); }
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardBody className="space-y-4">
-          <div className="flex gap-2 mb-2">
-            <Button size="sm" variant={mode === "rule" ? "primary" : "ghost"} onClick={() => setMode("rule")}>Select Rule</Button>
-            <Button size="sm" variant={mode === "query" ? "primary" : "ghost"} onClick={() => setMode("query")}>Raw Query</Button>
-          </div>
-          {mode === "rule" ? (
-            <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
-          ) : (
-            <>
-              <Textarea label="Detection Query" value={query} onChange={(e) => setQuery(e.target.value)} rows={6} className="font-mono text-sm" placeholder="Paste your detection query here for quick feedback..." />
-              <Select label="Language" value={language} onChange={(e) => setLanguage(e.target.value)} options={[
-                { value: "kuery", label: "KQL" }, { value: "eql", label: "EQL" },
-                { value: "lucene", label: "Lucene" }, { value: "esql", label: "ES|QL" },
-              ]} />
-            </>
-          )}
-          <Button onClick={handleFeedback} loading={loading || fetchingQuery} className="w-full">
-            {loading ? "Getting Feedback..." : fetchingQuery ? "Fetching rule query..." : "Get Quick Feedback"}
-          </Button>
-        </CardBody>
-      </Card>
-
-      {loading && (
-        <div className="flex flex-col items-center gap-3 py-12">
-          <Spinner size="lg" />
-          <p className="text-text-secondary text-sm">AI is reviewing the query...</p>
-        </div>
-      )}
-
-      {result && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-6">
-            <ScoreGauge score={result.score} size={100} label="Quality Score" />
-            <div className="flex items-center gap-2">
-              <Badge preset={result.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{result.rating}</Badge>
-              <Badge preset={
-                result.verdict === "production_ready" ? "production" :
-                result.verdict === "needs_tuning" ? "reviewed" :
-                result.verdict === "needs_rework" ? "high" : "critical"
-              }>{result.verdict?.replace(/_/g, " ")}</Badge>
-            </div>
-          </div>
-
-          <Card>
-            <CardHeader><h3 className="font-semibold text-text">Feedback</h3></CardHeader>
-            <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.feedback}</p></CardBody>
-          </Card>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {result.topIssues?.length > 0 && (
-              <Card>
-                <CardHeader><h3 className="font-semibold text-danger">Top Issues</h3></CardHeader>
-                <CardBody>
-                  <ol className="space-y-1 list-decimal list-inside">
-                    {result.topIssues.map((issue, i) => <li key={i} className="text-sm text-text-secondary">{issue}</li>)}
-                  </ol>
-                </CardBody>
-              </Card>
-            )}
-            {result.quickFixes?.length > 0 && (
-              <Card>
-                <CardHeader><h3 className="font-semibold text-success">Quick Fixes</h3></CardHeader>
-                <CardBody>
-                  <ol className="space-y-1 list-decimal list-inside">
-                    {result.quickFixes.map((fix, i) => <li key={i} className="text-sm text-text-secondary">{fix}</li>)}
-                  </ol>
-                </CardBody>
-              </Card>
-            )}
-          </div>
         </div>
       )}
     </div>

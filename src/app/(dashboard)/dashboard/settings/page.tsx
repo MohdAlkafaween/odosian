@@ -350,10 +350,10 @@ export default function SettingsPage() {
   const testProvider = async (providerId: string) => {
     setTestingProvider(true);
     try {
-      const res = await fetch("/api/analysis/feedback", {
+      const res = await fetch("/api/analysis/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: "process.name: test", language: "kuery" }),
+        body: JSON.stringify({ ruleId: "test-connection", testOnly: true }),
       });
       if (res.ok) addToast("success", "AI provider connection successful");
       else {

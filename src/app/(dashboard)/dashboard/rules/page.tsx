@@ -84,7 +84,7 @@ const AI_FLAG_OPTIONS = [
   { value: "enhanced", label: "Enhanced" },
   { value: "deployed", label: "Deployed" },
   { value: "covered", label: "Covered" },
-  { value: "feedback", label: "QF (Feedback)" },
+  { value: "simulated", label: "Simulated" },
   { value: "generated", label: "Generated" },
   { value: "none", label: "No AI Activity" },
 ];

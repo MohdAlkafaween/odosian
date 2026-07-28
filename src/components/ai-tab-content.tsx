@@ -9,21 +9,19 @@ import { Spinner } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
 import { useToastStore } from "@/stores/toast";
 import { useState } from "react";
-import type { AnalyzeResult, EnhanceResult, GenerateResult, FeedbackResult } from "@/lib/ai";
+import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
-const TYPE_LABELS: Record<TabType, string> = {
+const TYPE_LABELS: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
   generate: "Generation",
-  feedback: "Quick Feedback",
   simulate: "Attack Simulation",
 };
 
-const TYPE_BADGE_PRESET: Record<TabType, string> = {
+const TYPE_BADGE_PRESET: Record<string, string> = {
   analyze: "analyzed",
   enhance: "enhanced",
   generate: "generated",
-  feedback: "qf",
   simulate: "critical",
 };
 
@@ -91,9 +89,6 @@ export function AITabContent() {
             {activeTab.type === "generate" && (
               <TabGenerateResults result={activeTab.result as GenerateResult} />
             )}
-            {activeTab.type === "feedback" && (
-              <TabFeedbackResults result={activeTab.result as FeedbackResult} />
-            )}
             {activeTab.type === "simulate" && (
               <TabSimulateResults result={activeTab.result as SimulateResult} />
             )}
@@ -105,18 +100,60 @@ export function AITabContent() {
 }
 
 function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?: string }) {
+  const [enhancing, setEnhancing] = useState(false);
+  const { addToast } = useToastStore();
+  const { addTab, updateTab, setActiveTab } = useTabStore();
+
+  const handleEnhance = async () => {
+    if (!ruleId) return;
+    setEnhancing(true);
+    const tabId = addTab({
+      type: "enhance",
+      title: "Enhancement",
+      ruleId,
+      status: "running",
+      statusMessage: "AI is enhancing the rule...",
+    });
+    try {
+      const res = await fetch("/api/analysis/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tabId, { status: "completed", result: data.analysis });
+        setActiveTab(tabId);
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
+      }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-6">
-        <ScoreGauge score={result.score} size={100} label="Quality Score" />
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Badge preset={result.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{result.rating}</Badge>
-            <Badge preset={result.fpRisk === "high" ? "critical" : result.fpRisk === "medium" ? "medium" : "low"}>
-              FP Risk: {result.fpRisk}
-            </Badge>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <ScoreGauge score={result.score} size={100} label="Quality Score" />
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Badge preset={result.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{result.rating}</Badge>
+              <Badge preset={result.fpRisk === "high" ? "critical" : result.fpRisk === "medium" ? "medium" : "low"}>
+                FP Risk: {result.fpRisk}
+              </Badge>
+            </div>
           </div>
         </div>
+        {ruleId && (
+          <Button onClick={handleEnhance} loading={enhancing} variant="primary" className="gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+            Enhance This Rule
+          </Button>
+        )}
       </div>
 
       <Card>
@@ -459,52 +496,6 @@ function TabGenerateResults({ result }: { result: GenerateResult }) {
           </CardBody>
         </Card>
       )}
-    </div>
-  );
-}
-
-function TabFeedbackResults({ result }: { result: FeedbackResult }) {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-6">
-        <ScoreGauge score={result.score} size={100} label="Quality Score" />
-        <div className="flex items-center gap-2">
-          <Badge preset={result.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{result.rating}</Badge>
-          <Badge preset={
-            result.verdict === "production_ready" ? "production" :
-            result.verdict === "needs_tuning" ? "reviewed" :
-            result.verdict === "needs_rework" ? "high" : "critical"
-          }>{result.verdict?.replace(/_/g, " ")}</Badge>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader><h3 className="font-semibold text-text">Feedback</h3></CardHeader>
-        <CardBody><p className="text-sm text-text-secondary whitespace-pre-wrap">{result.feedback}</p></CardBody>
-      </Card>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {result.topIssues?.length > 0 && (
-          <Card>
-            <CardHeader><h3 className="font-semibold text-danger">Top Issues</h3></CardHeader>
-            <CardBody>
-              <ol className="space-y-1 list-decimal list-inside">
-                {result.topIssues.map((issue, i) => <li key={i} className="text-sm text-text-secondary">{issue}</li>)}
-              </ol>
-            </CardBody>
-          </Card>
-        )}
-        {result.quickFixes?.length > 0 && (
-          <Card>
-            <CardHeader><h3 className="font-semibold text-success">Quick Fixes</h3></CardHeader>
-            <CardBody>
-              <ol className="space-y-1 list-decimal list-inside">
-                {result.quickFixes.map((fix, i) => <li key={i} className="text-sm text-text-secondary">{fix}</li>)}
-              </ol>
-            </CardBody>
-          </Card>
-        )}
-      </div>
     </div>
   );
 }
