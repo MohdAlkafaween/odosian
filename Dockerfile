@@ -8,6 +8,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npx prisma generate --schema=prisma/schema.prisma
+# Placeholder only, so lib/auth.ts doesn't throw during Next.js's build-time
+# page-data collection. The real secret is injected at runtime via the k8s Secret.
+ENV JWT_SECRET=build-time-placeholder-not-used-at-runtime
 RUN npm run build
 
 FROM node:22-alpine AS production
