@@ -71,20 +71,11 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: Authen
       version: existing.version + 1,
     };
 
-    if (body.enhancedDescription !== undefined) data.description = String(body.enhancedDescription);
-    if (body.enhancedQuery !== undefined) data.query = String(body.enhancedQuery);
-    if (body.newSeverity !== undefined) data.severity = String(body.newSeverity);
-    if (body.newRiskScore !== undefined) {
-      // AI providers occasionally emit numeric fields as quoted strings
-      // (e.g. "75" instead of 75) depending on the model/gateway — Prisma's
-      // Int column rejects that outright, so coerce and validate here rather
-      // than let a malformed AI response crash the whole apply.
-      const riskScore = Math.round(Number(body.newRiskScore));
-      if (Number.isFinite(riskScore)) {
-        data.riskScore = Math.min(100, Math.max(0, riskScore));
-      }
-    }
-    if (body.investigationGuide !== undefined) data.investigationGuide = String(body.investigationGuide);
+    if (body.enhancedDescription !== undefined) data.description = body.enhancedDescription;
+    if (body.enhancedQuery !== undefined) data.query = body.enhancedQuery;
+    if (body.newSeverity !== undefined) data.severity = body.newSeverity;
+    if (body.newRiskScore !== undefined) data.riskScore = body.newRiskScore;
+    if (body.investigationGuide !== undefined) data.investigationGuide = body.investigationGuide;
     if (body.falsePositives !== undefined) data.falsePositives = JSON.stringify(Array.isArray(body.falsePositives) ? body.falsePositives : []);
     if (body.references !== undefined) data.references = JSON.stringify(Array.isArray(body.references) ? body.references : []);
     if (body.indexPatterns !== undefined && Array.isArray(body.indexPatterns)) data.index = body.indexPatterns.join(", ");
