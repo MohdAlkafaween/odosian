@@ -26,6 +26,7 @@ interface AnalysisRecord {
 const TYPE_LABELS: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
+  post_enhance: "Post-Enhancement",
   generate: "Generation",
   feedback: "Feedback",
 };
@@ -151,6 +152,7 @@ export default function AnalysisHistoryPage() {
                 { value: "", label: "All Types" },
                 { value: "analyze", label: "Analysis" },
                 { value: "enhance", label: "Enhancement" },
+                { value: "post_enhance", label: "Post-Enhancement" },
                 { value: "generate", label: "Generation" },
                 { value: "feedback", label: "Feedback" },
               ]}

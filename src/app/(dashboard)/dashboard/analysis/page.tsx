@@ -577,7 +577,7 @@ function EnhanceResults({ result, ruleId, addToast }: {
       const res = await fetch("/api/analysis/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId, postEnhancement: true }),
+        body: JSON.stringify({ ruleId, query: result.enhancedQuery, postEnhancement: true }),
       });
       const data = await res.json();
       if (res.ok) {

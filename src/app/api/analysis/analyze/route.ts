@@ -82,7 +82,19 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
         });
         if (!rule) return errorResponse("Rule not found", 404);
         ruleId = rule.id;
-        userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+
+        if (validated.data.postEnhancement && validated.data.query) {
+          const originalQuery = rule.query;
+          const ruleWithEnhancedQuery = { ...(rule as unknown as Record<string, unknown>), query: validated.data.query };
+          userMessage = `This is a POST-ENHANCEMENT analysis. Compare the original query against the enhanced query and evaluate the improvements.
+
+${buildRuleMessage(ruleWithEnhancedQuery, rule.mitreMappings)}
+
+Original Query (before enhancement):
+${originalQuery}`;
+        } else {
+          userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+        }
       } else {
         userMessage = `Detection Query (${validated.data.language || "kuery"}, ${validated.data.ruleType || "query"}):\n${validated.data.query}`;
       }
