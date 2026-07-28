@@ -101,7 +101,11 @@ export function rateLimit(
       if (existing) {
         if (existing.windowStart > windowStart) {
           if (existing.count >= limit) {
-            return errorResponse("Rate limit exceeded. Try again later.", 429);
+            const retryAfter = Math.ceil((existing.windowStart.getTime() + 60000 - now.getTime()) / 1000);
+            const resp = errorResponse("Rate limit exceeded. Try again later.", 429);
+            resp.headers.set("Retry-After", String(retryAfter));
+            resp.headers.set("X-RateLimit-Remaining", "0");
+            return resp;
           }
           await prisma.rateLimit.update({
             where: { id: existing.id },
@@ -119,7 +123,18 @@ export function rateLimit(
         });
       }
 
-      return handler(request, context);
+      let currentCount = 1;
+      if (existing) {
+        if (existing.windowStart > windowStart) {
+          currentCount = existing.count + 1;
+        }
+      }
+      const response = await handler(request, context);
+      const remaining = Math.max(0, limit - currentCount);
+      response.headers.set("X-RateLimit-Limit", String(limit));
+      response.headers.set("X-RateLimit-Remaining", String(remaining));
+      response.headers.set("X-RateLimit-Reset", String(Math.ceil((now.getTime() + 60000) / 1000)));
+      return response;
     };
   };
 }

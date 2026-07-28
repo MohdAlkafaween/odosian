@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 
-export type ThemeId = "midnight" | "obsidian" | "phosphor" | "sentinel";
+export type ThemeId = "light" | "obsidian" | "phosphor" | "sentinel";
 
 interface ThemeColors {
   bg: string;
@@ -31,25 +31,25 @@ export interface ThemeDef {
 
 export const THEMES: ThemeDef[] = [
   {
-    id: "midnight",
-    name: "Midnight",
-    description: "Deep navy with cyan accents",
+    id: "light",
+    name: "Light",
+    description: "Clean light interface",
     colors: {
-      bg: "#0B0F19",
-      surface: "#111827",
-      surfaceLight: "#1A2332",
-      border: "#1E2D3D",
-      borderFocus: "#4CBDFA",
-      primary: "#4CBDFA",
-      primaryHover: "#3AAEF0",
-      primaryMuted: "#4CBDFA1A",
-      success: "#84E29E",
-      accent: "#6ED1CA",
-      danger: "#EF4444",
-      warning: "#EAB308",
-      text: "#FFFFFF",
-      textSecondary: "#94A3B8",
-      textMuted: "#64748B",
+      bg: "#F8FAFC",
+      surface: "#FFFFFF",
+      surfaceLight: "#F1F5F9",
+      border: "#E2E8F0",
+      borderFocus: "#3B82F6",
+      primary: "#2563EB",
+      primaryHover: "#1D4ED8",
+      primaryMuted: "#2563EB1A",
+      success: "#16A34A",
+      accent: "#0891B2",
+      danger: "#DC2626",
+      warning: "#CA8A04",
+      text: "#0F172A",
+      textSecondary: "#475569",
+      textMuted: "#94A3B8",
     },
   },
   {
@@ -122,7 +122,8 @@ export const THEMES: ThemeDef[] = [
 
 const THEME_MAP = new Map(THEMES.map((t) => [t.id, t]));
 
-function applyTheme(theme: ThemeDef) {
+function applyTheme(theme: ThemeDef | undefined) {
+  if (!theme) return;
   const root = document.documentElement;
   const c = theme.colors;
   root.style.setProperty("--color-bg", c.bg);
@@ -140,6 +141,7 @@ function applyTheme(theme: ThemeDef) {
   root.style.setProperty("--color-text", c.text);
   root.style.setProperty("--color-text-secondary", c.textSecondary);
   root.style.setProperty("--color-text-muted", c.textMuted);
+  root.setAttribute("data-theme", theme.id === "light" ? "light" : "dark");
 }
 
 interface ThemeState {
@@ -149,7 +151,7 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  themeId: "midnight",
+  themeId: "obsidian",
   setTheme: (id) => {
     const theme = THEME_MAP.get(id);
     if (!theme) return;
@@ -159,9 +161,11 @@ export const useThemeStore = create<ThemeState>((set) => ({
   },
   initTheme: () => {
     const saved = localStorage.getItem("odosian-theme") as ThemeId | null;
-    const id = saved && THEME_MAP.has(saved) ? saved : "midnight";
-    const theme = THEME_MAP.get(id)!;
-    applyTheme(theme);
-    set({ themeId: id });
+    const id = saved && THEME_MAP.has(saved) ? saved : "obsidian";
+    const theme = THEME_MAP.get(id);
+    if (theme) {
+      applyTheme(theme);
+      set({ themeId: id });
+    }
   },
 }));

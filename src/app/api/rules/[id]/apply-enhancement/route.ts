@@ -35,6 +35,30 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: Authen
       return errorResponse("You can only edit your own rules", 403);
     }
 
+    await prisma.ruleVersion.create({
+      data: {
+        ruleId: id,
+        version: existing.version,
+        title: existing.title,
+        description: existing.description,
+        query: existing.query,
+        severity: existing.severity,
+        riskScore: existing.riskScore,
+        ruleType: existing.ruleType,
+        language: existing.language,
+        index: existing.index,
+        tags: existing.tags,
+        status: existing.status,
+        interval: existing.interval,
+        fromTime: existing.fromTime,
+        maxSignals: existing.maxSignals,
+        investigationGuide: existing.investigationGuide,
+        falsePositives: existing.falsePositives,
+        references: existing.references,
+        changedBy: request.user.id,
+      },
+    });
+
     const body = (await request.json().catch(() => ({}))) as ApplyEnhancementBody;
 
     let title = body.enhancedTitle?.trim() || existing.title;

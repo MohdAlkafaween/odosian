@@ -15,6 +15,7 @@ import { useThemeStore } from "@/stores/theme";
 import { useTabStore } from "@/stores/tabs";
 import { AITabBar } from "@/components/ai-tab-bar";
 import { AITabContent } from "@/components/ai-tab-content";
+import { RateLimitMonitor } from "@/components/rate-limit-monitor";
 
 export default function DashboardLayout({
   children,
@@ -136,6 +137,7 @@ export default function DashboardLayout({
 
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <KeyboardShortcuts open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <RateLimitMonitor />
     </AuthGuard>
   );
 }

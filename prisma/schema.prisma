@@ -30,6 +30,8 @@ model User {
   auditLogs         AuditLog[]
   projects          Project[]
   attackSimulations AttackSimulation[]
+  comments          Comment[]
+  notifications     Notification[]
 }
 
 model Rule {
@@ -74,6 +76,8 @@ model Rule {
   mitreMappings MitreMapping[]
   projectRules  ProjectRule[]
   customFields  RuleCustomField[]
+  versions      RuleVersion[]
+  comments      Comment[]
 }
 
 model Analysis {
@@ -307,4 +311,54 @@ model MitreAttackPrompt {
   isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model RuleVersion {
+  id                 String   @id @default(uuid())
+  ruleId             String
+  rule               Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  version            Int
+  title              String
+  description        String   @default("")
+  query              String
+  severity           String
+  riskScore          Int
+  ruleType           String
+  language           String
+  index              String   @default("")
+  tags               String   @default("[]")
+  status             String
+  interval           String   @default("5m")
+  fromTime           String   @default("now-6m")
+  maxSignals         Int      @default(100)
+  investigationGuide String   @default("")
+  falsePositives     String   @default("[]")
+  references         String   @default("[]")
+  changedBy          String
+  changeNote         String   @default("")
+  createdAt          DateTime @default(now())
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  ruleId    String
+  rule      Rule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  type       String
+  title      String
+  message    String   @default("")
+  targetType String   @default("")
+  targetId   String   @default("")
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
 }

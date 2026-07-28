@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { authenticate, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 import * as XLSX from "xlsx";
+import PDFDocument from "pdfkit";
 
 const JSON_FIELDS = ["tags", "falsePositives", "references"];
 
@@ -126,6 +127,97 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
         headers: {
           "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           "Content-Disposition": "attachment; filename=rules.xlsx",
+        },
+      });
+    }
+
+    if (format === "pdf") {
+      const doc = new PDFDocument({ size: "A4", margin: 50 });
+      const chunks: Buffer[] = [];
+      doc.on("data", (chunk: Buffer) => chunks.push(chunk));
+
+      doc.fontSize(20).font("Helvetica-Bold").text("Detection Rules Report", { align: "center" });
+      doc.moveDown(0.5);
+      doc.fontSize(10).font("Helvetica").fillColor("#666666")
+        .text(`Generated: ${new Date().toISOString().split("T")[0]} | ${parsed.length} rules`, { align: "center" });
+      doc.moveDown(1);
+
+      for (let i = 0; i < parsed.length; i++) {
+        const r = parsed[i];
+        if (i > 0) doc.moveDown(0.5);
+        if (doc.y > 700) doc.addPage();
+
+        doc.fontSize(14).font("Helvetica-Bold").fillColor("#000000")
+          .text(String(r.title));
+        doc.moveDown(0.3);
+        doc.fontSize(9).font("Helvetica").fillColor("#333333")
+          .text(`Severity: ${String(r.severity).toUpperCase()}  |  Status: ${r.status}  |  Type: ${r.ruleType}  |  Language: ${r.language}  |  Risk Score: ${r.riskScore}`);
+        if (r.description) {
+          doc.moveDown(0.2);
+          doc.fontSize(9).fillColor("#444444").text(String(r.description), { width: 495 });
+        }
+        doc.moveDown(0.2);
+        doc.fontSize(8).font("Courier").fillColor("#1a1a1a")
+          .text(String(r.query || "").substring(0, 500), { width: 495 });
+        const tags = Array.isArray(r.tags) ? (r.tags as string[]).join(", ") : "";
+        if (tags) {
+          doc.moveDown(0.2);
+          doc.fontSize(8).font("Helvetica").fillColor("#666666").text(`Tags: ${tags}`);
+        }
+        const mitre = r.mitreMappings as Array<{ tacticName: string; techniqueName: string }>;
+        if (Array.isArray(mitre) && mitre.length > 0) {
+          doc.moveDown(0.1);
+          doc.fontSize(8).fillColor("#666666")
+            .text(`MITRE: ${mitre.map((m) => `${m.tacticName} > ${m.techniqueName}`).join(", ")}`);
+        }
+        doc.moveDown(0.3);
+        doc.strokeColor("#e0e0e0").lineWidth(0.5)
+          .moveTo(50, doc.y).lineTo(545, doc.y).stroke();
+      }
+
+      doc.end();
+      await new Promise<void>((resolve) => doc.on("end", resolve));
+      const pdfBuffer = Buffer.concat(chunks);
+
+      return new NextResponse(pdfBuffer, {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": "attachment; filename=rules-report.pdf",
+        },
+      });
+    }
+
+    if (format === "stix") {
+      const indicators = parsed.map((r) => {
+        const mitre = r.mitreMappings as Array<{ tacticId: string; tacticName: string; techniqueId: string; techniqueName: string }>;
+        return {
+          type: "indicator",
+          spec_version: "2.1",
+          id: `indicator--${r.id}`,
+          created: r.createdAt,
+          modified: r.updatedAt,
+          name: r.title,
+          description: r.description,
+          pattern: `[${r.language}:query = '${String(r.query).replace(/'/g, "\\'")}']`,
+          pattern_type: "stix",
+          valid_from: r.createdAt,
+          indicator_types: ["malicious-activity"],
+          labels: [String(r.severity)],
+          kill_chain_phases: Array.isArray(mitre) ? mitre.map((m) => ({
+            kill_chain_name: "mitre-attack",
+            phase_name: m.tacticName?.toLowerCase().replace(/\s+/g, "-") || m.tacticId,
+          })) : [],
+        };
+      });
+      const bundle = {
+        type: "bundle",
+        id: `bundle--${crypto.randomUUID()}`,
+        objects: indicators,
+      };
+      return new NextResponse(JSON.stringify(bundle, null, 2), {
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": "attachment; filename=rules-stix-bundle.json",
         },
       });
     }

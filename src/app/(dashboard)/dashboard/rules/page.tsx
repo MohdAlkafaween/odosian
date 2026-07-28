@@ -128,6 +128,9 @@ export default function RulesListPage() {
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; failed: number; errors: string[] } | null>(null);
+  const [bulkAction, setBulkAction] = useState("");
+  const [bulkValue, setBulkValue] = useState("");
+  const [bulkLoading, setBulkLoading] = useState(false);
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -219,6 +222,33 @@ export default function RulesListPage() {
     setSelectedKeys(new Set());
     addToast("success", `${deleted} rule(s) deleted`);
     fetchRules();
+  };
+
+  const handleBulkAction = async (action: string, value: string) => {
+    if (selectedKeys.size === 0) return;
+    setBulkLoading(true);
+    try {
+      const res = await fetch("/api/rules/bulk", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selectedKeys], action, value }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        addToast("success", `Updated ${data.updated} rule(s)`);
+        setSelectedKeys(new Set());
+        setBulkAction("");
+        setBulkValue("");
+        fetchRules();
+      } else {
+        const data = await res.json();
+        addToast("error", data.error || "Bulk update failed");
+      }
+    } catch {
+      addToast("error", "Bulk update failed");
+    } finally {
+      setBulkLoading(false);
+    }
   };
 
   const formatDate = (d: string) =>
@@ -355,7 +385,7 @@ export default function RulesListPage() {
             <Button variant="outline" onClick={() => setShowExport(!showExport)}>Export</Button>
             {showExport && (
               <div className="absolute right-0 mt-1 w-40 bg-surface border border-border rounded-lg shadow-lg z-10">
-                {(["json", "csv", "xlsx"] as const).map((fmt) => (
+                {(["json", "csv", "xlsx", "pdf", "stix"] as const).map((fmt) => (
                   <button
                     key={fmt}
                     onClick={() => {
@@ -389,9 +419,55 @@ export default function RulesListPage() {
         <Select value={language} onChange={(e) => { setLanguage(e.target.value); setPage(1); }} options={LANG_OPTIONS} />
         <Select value={aiFlag} onChange={(e) => { setAiFlag(e.target.value); setPage(1); }} options={AI_FLAG_OPTIONS} />
         {selectedKeys.size > 0 && (
-          <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
-            Delete ({selectedKeys.size})
-          </Button>
+          <div className="flex items-center gap-2 bg-surface-light border border-border rounded-lg px-3 py-1.5">
+            <span className="text-xs font-semibold text-text">{selectedKeys.size} selected</span>
+            <Select
+              value={bulkAction}
+              onChange={(e) => { setBulkAction(e.target.value); setBulkValue(""); }}
+              options={[
+                { value: "", label: "Bulk Action..." },
+                { value: "status", label: "Change Status" },
+                { value: "severity", label: "Change Severity" },
+              ]}
+            />
+            {bulkAction === "status" && (
+              <Select
+                value={bulkValue}
+                onChange={(e) => setBulkValue(e.target.value)}
+                options={[
+                  { value: "", label: "Select..." },
+                  { value: "draft", label: "Draft" },
+                  { value: "reviewed", label: "Reviewed" },
+                  { value: "production", label: "Production" },
+                  { value: "deprecated", label: "Deprecated" },
+                ]}
+              />
+            )}
+            {bulkAction === "severity" && (
+              <Select
+                value={bulkValue}
+                onChange={(e) => setBulkValue(e.target.value)}
+                options={[
+                  { value: "", label: "Select..." },
+                  { value: "low", label: "Low" },
+                  { value: "medium", label: "Medium" },
+                  { value: "high", label: "High" },
+                  { value: "critical", label: "Critical" },
+                ]}
+              />
+            )}
+            {bulkAction && bulkValue && (
+              <Button size="sm" onClick={() => handleBulkAction(bulkAction, bulkValue)} loading={bulkLoading}>
+                Apply
+              </Button>
+            )}
+            <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
+              Delete
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedKeys(new Set())}>
+              Clear
+            </Button>
+          </div>
         )}
       </div>
 

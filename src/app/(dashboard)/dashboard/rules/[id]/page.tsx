@@ -12,6 +12,8 @@ import { PageLoader } from "@/components/ui/loading";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { VersionHistory } from "@/components/version-history";
+import { CommentsSection } from "@/components/comments-section";
 
 interface AnalysisRecord {
   id: string;
@@ -907,6 +909,28 @@ export default function RuleDetailPage() {
       )}
 
       {!analysesLoading && analyses.length === 0 && rule._count.analyses === 0 && null}
+
+      {/* Version History */}
+      <div className="mt-8">
+        <VersionHistory
+          ruleId={rule.id}
+          currentRule={{
+            version: rule.version,
+            title: rule.title,
+            description: rule.description,
+            query: rule.query,
+            severity: rule.severity,
+            riskScore: rule.riskScore,
+            status: rule.status,
+            language: rule.language,
+          }}
+        />
+      </div>
+
+      {/* Comments */}
+      <div className="mt-8">
+        <CommentsSection ruleId={rule.id} />
+      </div>
 
       {/* Elastic Push Dialog */}
       {elasticOpen && (
