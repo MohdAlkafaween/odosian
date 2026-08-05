@@ -6,15 +6,17 @@ import { processBatch } from "@/lib/batch-analysis";
 
 interface BatchBody {
   ruleIds?: string[];
+  operation?: string;
 }
 
 export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest) => {
   try {
     const body = (await request.json().catch(() => ({}))) as BatchBody;
     const ruleIds = Array.isArray(body.ruleIds) ? [...new Set(body.ruleIds)] : [];
+    const operation = body.operation === "enhance" ? "enhance" : "analyze";
 
-    if (ruleIds.length === 0) return errorResponse("Select at least one rule to analyze", 400);
-    if (ruleIds.length > 100) return errorResponse("Cannot analyze more than 100 rules at once", 400);
+    if (ruleIds.length === 0) return errorResponse(`Select at least one rule to ${operation}`, 400);
+    if (ruleIds.length > 100) return errorResponse(`Cannot ${operation} more than 100 rules at once`, 400);
 
     const existingRules = await prisma.rule.findMany({
       where: { id: { in: ruleIds } },
@@ -24,6 +26,7 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request: Authen
 
     const batch = await prisma.analysisBatch.create({
       data: {
+        operation,
         totalCount: existingRules.length,
         createdById: request.user.id,
         items: { create: existingRules.map((r) => ({ ruleId: r.id })) },
@@ -49,6 +52,7 @@ export const GET = requireRole("DETECTION_ENG", "ADMIN")(async () => {
   return NextResponse.json({
     batches: batches.map((b) => ({
       id: b.id,
+      operation: b.operation,
       status: b.status,
       totalCount: b.totalCount,
       completedCount: b.completedCount,

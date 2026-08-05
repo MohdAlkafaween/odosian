@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/loading";
 
 interface BatchRow {
   id: string;
+  operation: string;
   status: string;
   totalCount: number;
   completedCount: number;
@@ -27,6 +28,11 @@ const STATUS_PRESET: Record<string, "production" | "reviewed" | "draft" | "depre
   pending: "draft",
   partial: "deprecated",
   failed: "deprecated",
+};
+
+const OPERATION_LABEL: Record<string, string> = {
+  analyze: "Analysis",
+  enhance: "Enhancement",
 };
 
 export default function AnalysisBatchesPage() {
@@ -50,6 +56,11 @@ export default function AnalysisBatchesPage() {
   }, [fetchBatches]);
 
   const columns = [
+    {
+      key: "operation",
+      header: "Type",
+      render: (row: BatchRow) => <Badge preset="info">{OPERATION_LABEL[row.operation] || row.operation}</Badge>,
+    },
     {
       key: "status",
       header: "Status",

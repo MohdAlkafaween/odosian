@@ -831,42 +831,6 @@ function EnhanceTab({ rules, addToast }: {
       });
       const data = await res.json();
       if (!res.ok) {
-        if (res.status === 400 && data.error?.includes("analyze the rule first")) {
-          addToast("info", "Rule not analyzed yet — running analysis first...");
-          setStatusMessage("Step 1/2: Analyzing rule first...");
-          updateTab(tabId, { statusMessage: "Step 1/2: Analyzing rule first..." });
-
-          const analyzeRes = await fetch("/api/analysis/analyze", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ruleId }),
-          });
-          if (!analyzeRes.ok) {
-            const aData = await analyzeRes.json();
-            updateTab(tabId, { status: "failed", error: aData.error || "Analysis failed" });
-            addToast("error", aData.error || "Auto-analysis failed");
-            return;
-          }
-          addToast("success", "Analysis complete. Now enhancing...");
-
-          setStatusMessage("Step 2/2: Enhancing rule...");
-          updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
-          const retryRes = await fetch("/api/analysis/enhance", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ ruleId }),
-          });
-          const retryData = await retryRes.json();
-          if (!retryRes.ok) {
-            updateTab(tabId, { status: "failed", error: retryData.error || "Enhancement failed" });
-            addToast("error", retryData.error || "Enhancement failed");
-            return;
-          }
-          setResult(retryData.analysis);
-          updateTab(tabId, { status: "completed", result: retryData.analysis });
-          addToast("success", "Rule analyzed and enhanced successfully");
-          return;
-        }
         updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
         addToast("error", data.error || "Enhancement failed");
         return;

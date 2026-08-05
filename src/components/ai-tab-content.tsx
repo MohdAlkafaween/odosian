@@ -7,8 +7,9 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
 import { Button } from "@/components/ui/button";
+import { BatchProgress } from "@/components/batch-progress";
 import { useToastStore } from "@/stores/toast";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -16,6 +17,8 @@ const TYPE_LABELS: Record<string, string> = {
   enhance: "Enhancement",
   generate: "Generation",
   simulate: "Attack Simulation",
+  batch_analyze: "Batch Analysis",
+  batch_enhance: "Batch Enhancement",
 };
 
 const TYPE_BADGE_PRESET: Record<string, string> = {
@@ -23,11 +26,28 @@ const TYPE_BADGE_PRESET: Record<string, string> = {
   enhance: "enhanced",
   generate: "generated",
   simulate: "critical",
+  batch_analyze: "analyzed",
+  batch_enhance: "enhanced",
 };
 
+const isBatchType = (type: TabType) => type === "batch_analyze" || type === "batch_enhance";
+
 export function AITabContent() {
-  const { tabs, activeTabId, setActiveTab, removeTab } = useTabStore();
+  const { tabs, activeTabId, setActiveTab, removeTab, updateTab } = useTabStore();
   const activeTab = tabs.find((t) => t.id === activeTabId);
+
+  // A batch's real status lives in the DB, not on the tab — this syncs the
+  // tab's spinner/checkmark in the tab bar to what BatchProgress polls.
+  // "partial" (some items failed) still counts as done, not failed, since
+  // the completed items are real, usable results.
+  const handleBatchStatusChange = useCallback((status: string) => {
+    if (!activeTab) return;
+    if (status === "completed" || status === "partial") {
+      if (activeTab.status !== "completed") updateTab(activeTab.id, { status: "completed" });
+    } else if (status === "failed") {
+      if (activeTab.status !== "failed") updateTab(activeTab.id, { status: "failed", error: "All items in this batch failed" });
+    }
+  }, [activeTab, updateTab]);
 
   if (!activeTab) return null;
 
@@ -58,14 +78,18 @@ export function AITabContent() {
           </Button>
         </div>
 
-        {activeTab.status === "running" && (
+        {isBatchType(activeTab.type) && activeTab.batchId && (
+          <BatchProgress batchId={activeTab.batchId} onStatusChange={handleBatchStatusChange} />
+        )}
+
+        {!isBatchType(activeTab.type) && activeTab.status === "running" && (
           <div className="flex flex-col items-center gap-3 py-16">
             <Spinner size="lg" />
             <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
           </div>
         )}
 
-        {activeTab.status === "failed" && (
+        {!isBatchType(activeTab.type) && activeTab.status === "failed" && (
           <Card>
             <CardBody>
               <div className="flex items-center gap-3 text-danger">
@@ -78,7 +102,7 @@ export function AITabContent() {
           </Card>
         )}
 
-        {activeTab.status === "completed" && activeTab.result && (
+        {!isBatchType(activeTab.type) && activeTab.status === "completed" && activeTab.result && (
           <>
             {activeTab.type === "analyze" && (
               <TabAnalyzeResults result={activeTab.result as AnalyzeResult} ruleId={activeTab.ruleId} />
@@ -101,7 +125,6 @@ export function AITabContent() {
 
 function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?: string }) {
   const [enhancing, setEnhancing] = useState(false);
-  const { addToast } = useToastStore();
   const { addTab, updateTab, setActiveTab } = useTabStore();
 
   const handleEnhance = async () => {
@@ -124,32 +147,6 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
       if (res.ok) {
         updateTab(tabId, { status: "completed", result: data.analysis });
         setActiveTab(tabId);
-      } else if (res.status === 400 && data.error?.includes("analyze the rule first")) {
-        addToast("info", "Rule not analyzed yet — running analysis first...");
-        updateTab(tabId, { statusMessage: "Step 1/2: Analyzing rule first..." });
-        const analyzeRes = await fetch("/api/analysis/analyze", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ruleId }),
-        });
-        if (!analyzeRes.ok) {
-          updateTab(tabId, { status: "failed", error: "Auto-analysis failed" });
-          return;
-        }
-        addToast("success", "Analysis complete. Now enhancing...");
-        updateTab(tabId, { statusMessage: "Step 2/2: Enhancing rule..." });
-        const retryRes = await fetch("/api/analysis/enhance", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ruleId }),
-        });
-        const retryData = await retryRes.json();
-        if (retryRes.ok) {
-          updateTab(tabId, { status: "completed", result: retryData.analysis });
-          setActiveTab(tabId);
-        } else {
-          updateTab(tabId, { status: "failed", error: retryData.error || "Enhancement failed" });
-        }
       } else {
         updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
       }

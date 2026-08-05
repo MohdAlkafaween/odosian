@@ -115,6 +115,7 @@ model Analysis {
 // when the process died can be picked back up with POST .../resume.
 model AnalysisBatch {
   id             String   @id @default(uuid())
+  operation      String   @default("analyze") // analyze | enhance
   status         String   @default("pending") // pending | running | completed | partial | failed
   totalCount     Int      @default(0)
   completedCount Int      @default(0)

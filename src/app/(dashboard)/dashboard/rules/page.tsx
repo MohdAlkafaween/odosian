@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
+import { useTabStore } from "@/stores/tabs";
 
 interface AIFlags {
   analyzed: boolean;
@@ -102,6 +103,7 @@ function getCategoryColor(category: string): string {
 export default function RulesListPage() {
   const router = useRouter();
   const { addToast } = useToastStore();
+  const { addTab } = useTabStore();
 
   const [rules, setRules] = useState<RuleRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +133,7 @@ export default function RulesListPage() {
   const [bulkAction, setBulkAction] = useState("");
   const [bulkValue, setBulkValue] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [analyzingBatch, setAnalyzingBatch] = useState(false);
+  const [startingBatch, setStartingBatch] = useState<"analyze" | "enhance" | null>(null);
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -252,25 +254,33 @@ export default function RulesListPage() {
     }
   };
 
-  const handleAnalyzeSelected = async () => {
+  const handleBatchOperation = async (operation: "analyze" | "enhance") => {
     if (selectedKeys.size === 0) return;
-    setAnalyzingBatch(true);
+    setStartingBatch(operation);
+    const count = selectedKeys.size;
     try {
       const res = await fetch("/api/analysis/batch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleIds: [...selectedKeys] }),
+        body: JSON.stringify({ ruleIds: [...selectedKeys], operation }),
       });
       const data = await res.json();
       if (res.ok) {
-        router.push(`/dashboard/analysis/batches/${data.batchId}`);
+        addTab({
+          type: operation === "analyze" ? "batch_analyze" : "batch_enhance",
+          title: `${operation === "analyze" ? "Analyze" : "Enhance"}: ${count} rules`,
+          batchId: data.batchId,
+          status: "running",
+          statusMessage: `${operation === "analyze" ? "Analyzing" : "Enhancing"} ${count} rules...`,
+        });
+        setSelectedKeys(new Set());
       } else {
-        addToast("error", data.error || "Failed to start batch analysis");
+        addToast("error", data.error || `Failed to start batch ${operation}`);
       }
     } catch {
-      addToast("error", "Failed to start batch analysis");
+      addToast("error", `Failed to start batch ${operation}`);
     } finally {
-      setAnalyzingBatch(false);
+      setStartingBatch(null);
     }
   };
 
@@ -484,8 +494,11 @@ export default function RulesListPage() {
                 Apply
               </Button>
             )}
-            <Button size="sm" onClick={handleAnalyzeSelected} loading={analyzingBatch}>
+            <Button size="sm" onClick={() => handleBatchOperation("analyze")} loading={startingBatch === "analyze"} disabled={!!startingBatch}>
               Analyze Selected
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBatchOperation("enhance")} loading={startingBatch === "enhance"} disabled={!!startingBatch}>
+              Enhance Selected
             </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
               Delete

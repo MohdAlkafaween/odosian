@@ -24,6 +24,7 @@ export const GET = requireRole("DETECTION_ENG", "ADMIN")(async (request, context
   return NextResponse.json({
     batch: {
       id: batch.id,
+      operation: batch.operation,
       status: batch.status,
       totalCount: batch.totalCount,
       completedCount: batch.completedCount,

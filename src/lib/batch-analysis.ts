@@ -1,5 +1,8 @@
 import { prisma } from "./prisma";
 import { analyzeRule } from "./analyze-rule";
+import { enhanceRule } from "./enhance-rule";
+
+const OPERATIONS = { analyze: analyzeRule, enhance: enhanceRule } as const;
 
 // Runs every pending/running item in a batch sequentially against the AI
 // provider, persisting status after each one so progress survives a crash —
@@ -10,6 +13,8 @@ export async function processBatch(batchId: string): Promise<void> {
     where: { id: batchId },
     data: { status: "running" },
   });
+
+  const runOperation = OPERATIONS[batchMeta.operation as keyof typeof OPERATIONS] || analyzeRule;
 
   const items = await prisma.analysisBatchItem.findMany({
     where: { batchId, status: { in: ["pending", "running"] } },
@@ -23,7 +28,7 @@ export async function processBatch(batchId: string): Promise<void> {
     });
 
     try {
-      const { analysis } = await analyzeRule(item.ruleId, batchMeta.createdById);
+      const { analysis } = await runOperation(item.ruleId, batchMeta.createdById);
 
       await prisma.analysisBatchItem.update({
         where: { id: item.id },
