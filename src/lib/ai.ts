@@ -269,10 +269,10 @@ function repairTruncatedJson(text: string): string | null {
   return chunk;
 }
 
-async function getProvider() {
-  const dbProvider = await prisma.aIProvider.findFirst({
-    where: { isDefault: true, isActive: true },
-  });
+async function getProvider(providerId?: string) {
+  const dbProvider = providerId
+    ? await prisma.aIProvider.findUnique({ where: { id: providerId } })
+    : await prisma.aIProvider.findFirst({ where: { isDefault: true, isActive: true } });
 
   if (dbProvider) {
     return {
@@ -440,6 +440,48 @@ export async function callAI<T>(promptName: string, userMessage: string): Promis
   }
 
   throw lastError || new AIError("AI call failed after retries", 503, false);
+}
+
+// A real connectivity check for the "Test Connection" button in Settings —
+// hits the provider directly with a trivial prompt instead of routing
+// through /api/analysis/analyze (which requires a real rule's UUID and
+// always failed validation for the placeholder "test-connection" id it used
+// to be given).
+export async function testProviderConnection(providerId?: string): Promise<{ modelUsed: string; latencyMs: number }> {
+  if (providerId) {
+    const exists = await prisma.aIProvider.findUnique({ where: { id: providerId } });
+    if (!exists) throw new Error("Provider not found");
+  }
+
+  const provider = await getProvider(providerId);
+  if (!provider.apiKey) throw new Error("AI provider API key is not configured");
+  if (!provider.baseUrl) throw new Error("AI provider base URL is not configured");
+
+  const anthropic = isAnthropicProvider(provider.baseUrl);
+  const systemPrompt = 'Respond with valid JSON only, exactly: {"status":"ok"}';
+  const { url, headers, body } = anthropic
+    ? buildAnthropicRequest(provider, systemPrompt, "ping")
+    : buildOpenAIRequest(provider, systemPrompt, "ping");
+
+  const start = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(url, { method: "POST", headers, body: JSON.stringify(body) });
+  } catch (e) {
+    const netMsg = e instanceof Error ? e.message : "Unknown network error";
+    throw new Error(`Failed to connect to AI provider: ${netMsg}`);
+  }
+  const latencyMs = Date.now() - start;
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw classifyProviderError(res.status, errText);
+  }
+
+  const data = await res.json();
+  extractResponseContent(data, anthropic);
+
+  return { modelUsed: provider.name, latencyMs };
 }
 
 export async function callAIWithSystemPrompt<T>(systemPrompt: string, userMessage: string): Promise<AICallResult<T>> {

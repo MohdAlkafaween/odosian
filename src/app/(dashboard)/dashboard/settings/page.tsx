@@ -350,16 +350,10 @@ export default function SettingsPage() {
   const testProvider = async (providerId: string) => {
     setTestingProvider(true);
     try {
-      const res = await fetch("/api/analysis/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId: "test-connection", testOnly: true }),
-      });
-      if (res.ok) addToast("success", "AI provider connection successful");
-      else {
-        const data = await res.json();
-        addToast("error", `Connection test failed: ${data.error || "Unknown error"}`);
-      }
+      const res = await fetch(`/api/settings/providers/${providerId}/test`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) addToast("success", `AI provider connection successful (${data.latencyMs}ms)`);
+      else addToast("error", `Connection test failed: ${data.error || "Unknown error"}`);
     } catch { addToast("error", "Connection test failed"); }
     finally { setTestingProvider(false); }
   };
