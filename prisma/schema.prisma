@@ -32,6 +32,7 @@ model User {
   attackSimulations AttackSimulation[]
   comments          Comment[]
   notifications     Notification[]
+  analysisBatches   AnalysisBatch[]
 }
 
 model Rule {
@@ -75,6 +76,7 @@ model Rule {
   analyses      Analysis[]
   mitreMappings MitreMapping[]
   projectRules  ProjectRule[]
+  batchItems    AnalysisBatchItem[]
   customFields  RuleCustomField[]
   versions      RuleVersion[]
   comments      Comment[]
@@ -103,6 +105,40 @@ model Analysis {
   userId        String
   user          User     @relation(fields: [userId], references: [id])
   createdAt     DateTime @default(now())
+
+  batchItems AnalysisBatchItem[]
+}
+
+// A multi-rule "Analyze Selected" run. Progress lives here (not just in
+// browser state) so it survives a page reload or a pod restart/rebuild —
+// items already completed keep their result; anything still pending/running
+// when the process died can be picked back up with POST .../resume.
+model AnalysisBatch {
+  id             String   @id @default(uuid())
+  status         String   @default("pending") // pending | running | completed | partial | failed
+  totalCount     Int      @default(0)
+  completedCount Int      @default(0)
+  failedCount    Int      @default(0)
+  createdById    String
+  createdBy      User     @relation(fields: [createdById], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  items AnalysisBatchItem[]
+}
+
+model AnalysisBatchItem {
+  id          String    @id @default(uuid())
+  batchId     String
+  batch       AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  ruleId      String
+  rule        Rule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  status      String    @default("pending") // pending | running | completed | failed
+  analysisId  String?
+  analysis    Analysis? @relation(fields: [analysisId], references: [id])
+  error       String    @default("")
+  startedAt   DateTime?
+  completedAt DateTime?
 }
 
 model MitreMapping {

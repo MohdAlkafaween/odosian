@@ -70,9 +70,14 @@ function AnalysisContent() {
             Analyze, enhance, and generate detection rules with AI
           </p>
         </div>
-        <Link href="/dashboard/analysis/history">
-          <Button variant="outline" size="sm">View History</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/dashboard/analysis/batches">
+            <Button variant="outline" size="sm">Batch Runs</Button>
+          </Link>
+          <Link href="/dashboard/analysis/history">
+            <Button variant="outline" size="sm">View History</Button>
+          </Link>
+        </div>
       </div>
 
       <Tabs tabs={tabs} defaultTab={defaultTab}>

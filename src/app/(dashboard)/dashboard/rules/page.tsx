@@ -131,6 +131,7 @@ export default function RulesListPage() {
   const [bulkAction, setBulkAction] = useState("");
   const [bulkValue, setBulkValue] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [analyzingBatch, setAnalyzingBatch] = useState(false);
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -248,6 +249,28 @@ export default function RulesListPage() {
       addToast("error", "Bulk update failed");
     } finally {
       setBulkLoading(false);
+    }
+  };
+
+  const handleAnalyzeSelected = async () => {
+    if (selectedKeys.size === 0) return;
+    setAnalyzingBatch(true);
+    try {
+      const res = await fetch("/api/analysis/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleIds: [...selectedKeys] }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        router.push(`/dashboard/analysis/batches/${data.batchId}`);
+      } else {
+        addToast("error", data.error || "Failed to start batch analysis");
+      }
+    } catch {
+      addToast("error", "Failed to start batch analysis");
+    } finally {
+      setAnalyzingBatch(false);
     }
   };
 
@@ -461,6 +484,9 @@ export default function RulesListPage() {
                 Apply
               </Button>
             )}
+            <Button size="sm" onClick={handleAnalyzeSelected} loading={analyzingBatch}>
+              Analyze Selected
+            </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
               Delete
             </Button>

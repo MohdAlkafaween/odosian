@@ -1,0 +1,122 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Card, CardBody } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Spinner } from "@/components/ui/loading";
+
+interface BatchRow {
+  id: string;
+  status: string;
+  totalCount: number;
+  completedCount: number;
+  failedCount: number;
+  createdBy: string;
+  createdAt: string;
+  [key: string]: unknown;
+}
+
+const STATUS_PRESET: Record<string, "production" | "reviewed" | "draft" | "deprecated"> = {
+  completed: "production",
+  running: "reviewed",
+  pending: "draft",
+  partial: "deprecated",
+  failed: "deprecated",
+};
+
+export default function AnalysisBatchesPage() {
+  const router = useRouter();
+  const [batches, setBatches] = useState<BatchRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchBatches = useCallback(async () => {
+    try {
+      const res = await fetch("/api/analysis/batch");
+      const data = await res.json();
+      setBatches(data.batches || []);
+    } catch { /* ignore */ }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    fetchBatches();
+    const interval = setInterval(fetchBatches, 5000);
+    return () => clearInterval(interval);
+  }, [fetchBatches]);
+
+  const columns = [
+    {
+      key: "status",
+      header: "Status",
+      render: (row: BatchRow) => <Badge preset={STATUS_PRESET[row.status] || "info"}>{row.status}</Badge>,
+    },
+    {
+      key: "progress",
+      header: "Progress",
+      render: (row: BatchRow) => (
+        <span className="text-sm text-text-secondary">
+          <span className="text-success font-semibold">{row.completedCount}</span>
+          {row.failedCount > 0 && <span className="text-danger font-semibold"> / {row.failedCount} failed</span>}
+          {" "}of {row.totalCount}
+        </span>
+      ),
+    },
+    {
+      key: "createdBy",
+      header: "Started By",
+      render: (row: BatchRow) => <span className="text-text-secondary">{row.createdBy}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "Started",
+      render: (row: BatchRow) => <span className="text-sm text-text-muted">{new Date(row.createdAt).toLocaleString()}</span>,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (row: BatchRow) => (
+        <Link href={`/dashboard/analysis/batches/${row.id}`}>
+          <Button variant="ghost" size="sm">View</Button>
+        </Link>
+      ),
+    },
+  ];
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-[28px] font-extrabold text-text">Batch Analysis Runs</h1>
+          <p className="text-sm text-text-secondary mt-1">
+            Progress here is saved to the database — if the cluster restarts mid-run, reopen a batch to resume it.
+          </p>
+        </div>
+        <Link href="/dashboard/rules">
+          <Button variant="outline" size="sm">Select Rules</Button>
+        </Link>
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+      ) : batches.length === 0 ? (
+        <EmptyState
+          title="No batch runs yet"
+          description="Select multiple rules from the rules list and click Analyze Selected to start one."
+          actionLabel="Go to Rules"
+          onAction={() => router.push("/dashboard/rules")}
+        />
+      ) : (
+        <Card>
+          <CardBody className="p-0">
+            <DataTable columns={columns} data={batches} keyField="id" />
+          </CardBody>
+        </Card>
+      )}
+    </div>
+  );
+}
