@@ -100,6 +100,7 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
       rating: "",
       feedback: JSON.stringify(result.changelog || []),
       mitreMappings: JSON.stringify(result.newMitreMappings || []),
+      enhanceResult: JSON.stringify(result),
       modelUsed,
       tokensUsed,
       latencyMs,

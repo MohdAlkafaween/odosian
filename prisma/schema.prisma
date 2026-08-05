@@ -99,6 +99,12 @@ model Analysis {
   weaknesses    String   @default("[]")
   evasionRisks  String   @default("[]")
   fpRisk        String   @default("low")
+  // Full JSON-stringified EnhanceResult (enhancedTitle, newSeverity,
+  // newRiskScore, investigationGuide, falsePositives, references,
+  // indexPatterns, ...) for analysisType "enhance" — none of those fields
+  // have their own columns, so without this they'd only ever exist in the
+  // one-time API response and be unrecoverable on a later fetch.
+  enhanceResult String   @default("")
   modelUsed     String   @default("")
   tokensUsed    Int      @default(0)
   latencyMs     Int      @default(0)

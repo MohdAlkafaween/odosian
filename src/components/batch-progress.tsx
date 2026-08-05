@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
+import { useTabStore } from "@/stores/tabs";
 
 export interface BatchItem {
   id: string;
@@ -51,6 +52,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
   onStatusChange?: (status: string) => void;
 }) {
   const { addToast } = useToastStore();
+  const { addTab, updateTab } = useTabStore();
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
@@ -76,6 +78,32 @@ export function BatchProgress({ batchId, onStatusChange }: {
     const interval = setInterval(fetchBatch, 2000);
     return () => clearInterval(interval);
   }, [batch, fetchBatch]);
+
+  // Opens the exact same result view single-rule Analyze/Enhance produces —
+  // a completed AI tab — instead of navigating to the plain detail page,
+  // so this gets the real interactive buttons (Enhance This Rule, Apply to
+  // Rule, Analyze After Enhancement), not just a static read of the fields.
+  const handleView = async (item: BatchItem, operation: "analyze" | "enhance") => {
+    const tabId = addTab({
+      type: operation,
+      title: `${operation === "analyze" ? "Analyze" : "Enhance"}: ${item.ruleTitle}`,
+      ruleId: item.ruleId,
+      ruleName: item.ruleTitle,
+      status: "running",
+      statusMessage: "Loading result...",
+    });
+    try {
+      const res = await fetch(`/api/analysis/${item.analysisId}`);
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tabId, { status: "completed", result: data.analysis });
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Failed to load result" });
+      }
+    } catch {
+      updateTab(tabId, { status: "failed", error: "Failed to load result" });
+    }
+  };
 
   const handleResume = async () => {
     setResuming(true);
@@ -165,9 +193,12 @@ export function BatchProgress({ batchId, onStatusChange }: {
                   )}
                   <td className="px-4 py-3">
                     {item.status === "completed" && item.analysisId && (
-                      <Link href={`/dashboard/analysis/${item.analysisId}`} className="text-primary hover:underline text-xs">
+                      <button
+                        onClick={() => handleView(item, isEnhance ? "enhance" : "analyze")}
+                        className="text-primary hover:underline text-xs"
+                      >
                         View {isEnhance ? "Enhancement" : "Analysis"}
-                      </Link>
+                      </button>
                     )}
                     {item.status === "failed" && (
                       <span className="text-danger text-xs">{item.error}</span>

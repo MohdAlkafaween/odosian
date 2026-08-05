@@ -12,6 +12,15 @@ function parseJsonFields(analysis: Record<string, unknown>) {
       try { parsed[field] = JSON.parse(parsed[field] as string); } catch { /* keep string */ }
     }
   }
+  // Enhancement runs stash their full AI result (enhancedTitle, newSeverity,
+  // investigationGuide, ...) here since those fields have no columns of
+  // their own — merge it back in so this reads the same as the response
+  // from /api/analysis/enhance right after the run.
+  if (typeof parsed.enhanceResult === "string" && parsed.enhanceResult) {
+    try {
+      Object.assign(parsed, JSON.parse(parsed.enhanceResult as string));
+    } catch { /* keep as-is */ }
+  }
   return parsed;
 }
 
