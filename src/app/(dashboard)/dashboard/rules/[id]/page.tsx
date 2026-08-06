@@ -76,6 +76,7 @@ interface RuleDetail {
   falsePositives: string[];
   references: string[];
   elasticRuleId: string | null;
+  elasticEnabled: boolean;
   license: string;
   timestampOverride: string;
   timelineId: string;
@@ -122,6 +123,7 @@ export default function RuleDetailPage() {
   const [selectedConn, setSelectedConn] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [pausing, setPausing] = useState(false);
   const [togglingCovered, setTogglingCovered] = useState(false);
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [analysesLoading, setAnalysesLoading] = useState(false);
@@ -281,7 +283,7 @@ export default function RuleDetailPage() {
             : `Rule ${data.action} in Elastic Security`
         );
         setElasticOpen(false);
-        setRule((prev) => prev ? { ...prev, elasticRuleId: data.elasticRuleId } : prev);
+        setRule((prev) => prev ? { ...prev, elasticRuleId: data.elasticRuleId, elasticEnabled: data.enabled } : prev);
       } else {
         addToast("error", data.error || "Failed to push rule");
       }
@@ -289,6 +291,30 @@ export default function RuleDetailPage() {
       addToast("error", "Failed to push rule to Elastic");
     } finally {
       setPushing(false);
+    }
+  };
+
+  const handleToggleElasticEnabled = async () => {
+    if (!rule) return;
+    const nextEnabled = !rule.elasticEnabled;
+    setPausing(true);
+    try {
+      const res = await fetch(`/api/rules/${params.id}/elastic-enabled`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setRule((prev) => prev ? { ...prev, elasticEnabled: data.enabled } : prev);
+        addToast("success", nextEnabled ? "Rule resumed in Elastic" : "Rule paused in Elastic");
+      } else {
+        addToast("error", data.error || "Failed to update rule status");
+      }
+    } catch {
+      addToast("error", "Failed to update rule status");
+    } finally {
+      setPausing(false);
     }
   };
 
@@ -350,6 +376,23 @@ export default function RuleDetailPage() {
               {rule.elasticRuleId ? "Update in Elastic" : "Push to Elastic"}
             </span>
           </Button>
+          {rule.elasticRuleId && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleToggleElasticEnabled}
+              loading={pausing}
+            >
+              <span className="flex items-center gap-1.5">
+                {rule.elasticEnabled ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z" /></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
+                )}
+                {rule.elasticEnabled ? "Pause in Elastic" : "Resume in Elastic"}
+              </span>
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"

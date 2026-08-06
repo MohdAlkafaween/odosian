@@ -5,6 +5,7 @@ import { errorResponse } from "@/lib/errors";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { elasticFetch } from "@/lib/elastic-fetch";
 import { deriveRequiredFields } from "@/lib/required-fields";
+import { setElasticRuleEnabled } from "@/lib/elastic-rule-status";
 
 interface ElasticRulePayload {
   rule_id?: string;
@@ -111,39 +112,6 @@ function buildThreatArray(
   }
 
   return Array.from(tacticMap.values());
-}
-
-// Best-effort: disables the rule Odosian just forked away from. Kibana
-// allows toggling `enabled` on a rule via PATCH even when it's immutable
-// (unlike PUT, which rejects content-field changes on prebuilt rules) — this
-// uses PATCH specifically for that reason. Failure here doesn't fail the
-// push; the new duplicate was already created successfully.
-async function disableOldRule(
-  baseUrl: string,
-  spacePrefix: string,
-  apiKey: string,
-  oldRuleId: string,
-  verifySsl: boolean
-): Promise<boolean> {
-  try {
-    const res = await elasticFetch(
-      `${baseUrl}${spacePrefix}/api/detection_engine/rules`,
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `ApiKey ${apiKey}`,
-          "kbn-xsrf": "true",
-        },
-        body: JSON.stringify({ rule_id: oldRuleId, enabled: false }),
-        timeoutMs: 10000,
-      },
-      verifySsl
-    );
-    return res.ok;
-  } catch {
-    return false;
-  }
 }
 
 export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, context) => {
@@ -265,11 +233,16 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
 
       let oldRuleDisabled = false;
       if (isDuplicating) {
-        oldRuleDisabled = await disableOldRule(
+        // Best-effort: Kibana allows toggling `enabled` via PATCH even when a
+        // rule is immutable (unlike PUT, which rejects content-field changes
+        // on prebuilt rules). Failure here doesn't fail the push; the new
+        // duplicate was already created successfully.
+        oldRuleDisabled = await setElasticRuleEnabled(
           baseUrl,
           spacePrefix,
           connection.apiKey,
           rule.elasticRuleId!,
+          false,
           connection.verifySsl
         );
       }
@@ -287,6 +260,7 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
         data: {
           elasticRuleId,
           elasticEnabled: enabled,
+          elasticConnectionId: connectionId,
           ...(autoCover ? { covered: true, coveredAt: new Date() } : {}),
         },
       });

@@ -60,6 +60,10 @@ model Rule {
   // Last known enabled/disabled state as of the last push — not live-synced
   // with Elastic, same caveat as elasticRuleId itself.
   elasticEnabled     Boolean  @default(false)
+  // Which connection elasticRuleId lives in — needed so pause/resume can
+  // reach the right Kibana without asking the user to pick a connection again.
+  elasticConnectionId String?
+  elasticConnection    ElasticConnection? @relation(fields: [elasticConnectionId], references: [id], onDelete: SetNull)
   interval           String   @default("5m")
   fromTime           String   @default("now-6m")
   maxSignals         Int      @default(100)
@@ -346,6 +350,8 @@ model ElasticConnection {
   lastStatus  String   @default("")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  rules Rule[]
 }
 
 model MitreAttackPrompt {

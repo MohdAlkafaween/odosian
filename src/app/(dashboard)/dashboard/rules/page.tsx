@@ -146,6 +146,7 @@ export default function RulesListPage() {
   const [bulkValue, setBulkValue] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [startingBatch, setStartingBatch] = useState<"analyze" | "enhance" | null>(null);
+  const [bulkPausing, setBulkPausing] = useState<"pause" | "resume" | null>(null);
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -268,6 +269,36 @@ export default function RulesListPage() {
       addToast("error", `Failed to start batch ${operation}`);
     } finally {
       setStartingBatch(null);
+    }
+  };
+
+  // Rules without an elasticRuleId are silently skipped server-side (they
+  // were never pushed, so there's nothing to pause/resume) — only pushed
+  // rules that hit an actual error come back in the errors list.
+  const handleBulkElasticEnabled = async (enabled: boolean) => {
+    if (selectedKeys.size === 0) return;
+    setBulkPausing(enabled ? "resume" : "pause");
+    try {
+      const res = await fetch("/api/rules/bulk/elastic-enabled", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: [...selectedKeys], enabled }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const parts = [`${data.updated} ${enabled ? "resumed" : "paused"}`];
+        if (data.skipped > 0) parts.push(`${data.skipped} not pushed to Elastic`);
+        if (data.failed > 0) parts.push(`${data.failed} failed`);
+        addToast(data.failed > 0 ? "warning" : "success", parts.join(", "));
+        setSelectedKeys(new Set());
+        fetchRules();
+      } else {
+        addToast("error", data.error || "Failed to update rule status");
+      }
+    } catch {
+      addToast("error", "Failed to update rule status");
+    } finally {
+      setBulkPausing(null);
     }
   };
 
@@ -472,6 +503,12 @@ export default function RulesListPage() {
             </Button>
             <Button size="sm" variant="outline" onClick={() => handleBatchOperation("enhance")} loading={startingBatch === "enhance"} disabled={!!startingBatch}>
               Enhance Selected
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkElasticEnabled(false)} loading={bulkPausing === "pause"} disabled={!!bulkPausing}>
+              Pause Selected
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleBulkElasticEnabled(true)} loading={bulkPausing === "resume"} disabled={!!bulkPausing}>
+              Resume Selected
             </Button>
             <Button variant="danger" size="sm" onClick={() => setDeleteConfirm(true)}>
               Delete
