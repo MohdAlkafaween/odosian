@@ -56,6 +56,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
+  const [startingEnhance, setStartingEnhance] = useState(false);
 
   const fetchBatch = useCallback(async () => {
     try {
@@ -105,6 +106,39 @@ export function BatchProgress({ batchId, onStatusChange }: {
     }
   };
 
+  // Mirrors "Enhance This Rule" appearing after a single analyze completes —
+  // here it's "enhance everything this batch successfully analyzed", fired
+  // as its own new batch_enhance tab/run.
+  const handleBulkEnhance = async () => {
+    if (!batch) return;
+    const ruleIds = batch.items.filter((i) => i.status === "completed").map((i) => i.ruleId);
+    if (ruleIds.length === 0) return;
+    setStartingEnhance(true);
+    try {
+      const res = await fetch("/api/analysis/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleIds, operation: "enhance" }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addTab({
+          type: "batch_enhance",
+          title: `Enhance: ${ruleIds.length} rules`,
+          batchId: data.batchId,
+          status: "running",
+          statusMessage: `Enhancing ${ruleIds.length} rules...`,
+        });
+      } else {
+        addToast("error", data.error || "Failed to start bulk enhancement");
+      }
+    } catch {
+      addToast("error", "Failed to start bulk enhancement");
+    } finally {
+      setStartingEnhance(false);
+    }
+  };
+
   const handleResume = async () => {
     setResuming(true);
     try {
@@ -128,6 +162,9 @@ export function BatchProgress({ batchId, onStatusChange }: {
 
   const isEnhance = batch.operation === "enhance";
   const canResume = batch.status !== "completed" && batch.items.some((i) => i.status !== "completed");
+  const canBulkEnhance = batch.operation === "analyze"
+    && (batch.status === "completed" || batch.status === "partial")
+    && batch.items.some((i) => i.status === "completed");
   const progressPct = batch.totalCount > 0 ? Math.round(((batch.completedCount + batch.failedCount) / batch.totalCount) * 100) : 0;
 
   return (
@@ -136,11 +173,18 @@ export function BatchProgress({ batchId, onStatusChange }: {
         <p className="text-sm text-text-secondary">
           {OPERATION_LABEL[batch.operation] || batch.operation} started by {batch.createdBy} on {new Date(batch.createdAt).toLocaleString()}
         </p>
-        {canResume && (
-          <Button size="sm" onClick={handleResume} loading={resuming}>
-            {batch.status === "pending" || batch.status === "running" ? "Resume Now" : "Retry Failed"}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canBulkEnhance && (
+            <Button size="sm" onClick={handleBulkEnhance} loading={startingEnhance}>
+              Enhance {batch.items.filter((i) => i.status === "completed").length} Analyzed Rules
+            </Button>
+          )}
+          {canResume && (
+            <Button size="sm" variant="outline" onClick={handleResume} loading={resuming}>
+              {batch.status === "pending" || batch.status === "running" ? "Resume Now" : "Retry Failed"}
+            </Button>
+          )}
+        </div>
       </div>
 
       <Card className="mb-6">
