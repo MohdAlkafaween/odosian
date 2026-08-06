@@ -27,6 +27,7 @@ export interface BatchDetail {
   totalCount: number;
   completedCount: number;
   failedCount: number;
+  skippedCount: number;
   createdBy: string;
   createdAt: string;
   items: BatchItem[];
@@ -37,6 +38,7 @@ const ITEM_STATUS_STYLE: Record<string, string> = {
   running: "text-info",
   completed: "text-success",
   failed: "text-danger",
+  skipped: "text-text-muted",
 };
 
 const OPERATION_LABEL: Record<string, string> = {
@@ -57,6 +59,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
   const [startingEnhance, setStartingEnhance] = useState(false);
+  const [skipping, setSkipping] = useState<Set<string>>(new Set());
 
   const fetchBatch = useCallback(async () => {
     try {
@@ -139,6 +142,29 @@ export function BatchProgress({ batchId, onStatusChange }: {
     }
   };
 
+  // Excludes a rule from this batch — before it's picked up, or after it
+  // failed so a later resume/retry doesn't sweep it back in.
+  const handleSkip = async (item: BatchItem) => {
+    setSkipping((prev) => new Set(prev).add(item.id));
+    try {
+      const res = await fetch(`/api/analysis/batch/${batchId}/skip`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: item.id }),
+      });
+      if (res.ok) {
+        fetchBatch();
+      } else {
+        const data = await res.json();
+        addToast("error", data.error || "Failed to skip rule");
+      }
+    } catch {
+      addToast("error", "Failed to skip rule");
+    } finally {
+      setSkipping((prev) => { const next = new Set(prev); next.delete(item.id); return next; });
+    }
+  };
+
   const handleResume = async () => {
     setResuming(true);
     try {
@@ -161,11 +187,13 @@ export function BatchProgress({ batchId, onStatusChange }: {
   if (!batch) return <p className="text-text-muted">Batch not found.</p>;
 
   const isEnhance = batch.operation === "enhance";
-  const canResume = batch.status !== "completed" && batch.items.some((i) => i.status !== "completed");
+  const canResume = batch.items.some((i) => i.status === "pending" || i.status === "running" || i.status === "failed");
   const canBulkEnhance = batch.operation === "analyze"
     && (batch.status === "completed" || batch.status === "partial")
     && batch.items.some((i) => i.status === "completed");
-  const progressPct = batch.totalCount > 0 ? Math.round(((batch.completedCount + batch.failedCount) / batch.totalCount) * 100) : 0;
+  const progressPct = batch.totalCount > 0
+    ? Math.round(((batch.completedCount + batch.failedCount + batch.skippedCount) / batch.totalCount) * 100)
+    : 0;
 
   return (
     <div>
@@ -196,6 +224,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
             <span className="text-sm text-text-secondary">
               <span className="text-success font-semibold">{batch.completedCount}</span> completed
               {batch.failedCount > 0 && <> · <span className="text-danger font-semibold">{batch.failedCount}</span> failed</>}
+              {batch.skippedCount > 0 && <> · <span className="text-text-muted font-semibold">{batch.skippedCount}</span> skipped</>}
               {" "}of {batch.totalCount}
             </span>
           </div>
@@ -236,17 +265,31 @@ export function BatchProgress({ batchId, onStatusChange }: {
                     </td>
                   )}
                   <td className="px-4 py-3">
-                    {item.status === "completed" && item.analysisId && (
-                      <button
-                        onClick={() => handleView(item, isEnhance ? "enhance" : "analyze")}
-                        className="text-primary hover:underline text-xs"
-                      >
-                        View {isEnhance ? "Enhancement" : "Analysis"}
-                      </button>
-                    )}
-                    {item.status === "failed" && (
-                      <span className="text-danger text-xs">{item.error}</span>
-                    )}
+                    <div className="flex items-center gap-3">
+                      {item.status === "completed" && item.analysisId && (
+                        <button
+                          onClick={() => handleView(item, isEnhance ? "enhance" : "analyze")}
+                          className="text-primary hover:underline text-xs"
+                        >
+                          View {isEnhance ? "Enhancement" : "Analysis"}
+                        </button>
+                      )}
+                      {item.status === "failed" && (
+                        <span className="text-danger text-xs">{item.error}</span>
+                      )}
+                      {item.status === "skipped" && (
+                        <span className="text-text-muted text-xs">Excluded from this batch</span>
+                      )}
+                      {(item.status === "pending" || item.status === "failed") && (
+                        <button
+                          onClick={() => handleSkip(item)}
+                          disabled={skipping.has(item.id)}
+                          className="text-text-muted hover:text-danger text-xs underline disabled:opacity-50"
+                        >
+                          Skip
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

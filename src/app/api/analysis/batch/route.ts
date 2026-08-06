@@ -57,6 +57,7 @@ export const GET = requireRole("DETECTION_ENG", "ADMIN")(async () => {
       totalCount: b.totalCount,
       completedCount: b.completedCount,
       failedCount: b.failedCount,
+      skippedCount: b.skippedCount,
       createdBy: b.createdBy.name,
       createdAt: b.createdAt,
       updatedAt: b.updatedAt,

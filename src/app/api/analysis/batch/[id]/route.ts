@@ -29,6 +29,7 @@ export const GET = requireRole("DETECTION_ENG", "ADMIN")(async (request, context
       totalCount: batch.totalCount,
       completedCount: batch.completedCount,
       failedCount: batch.failedCount,
+      skippedCount: batch.skippedCount,
       createdBy: batch.createdBy.name,
       createdAt: batch.createdAt,
       updatedAt: batch.updatedAt,

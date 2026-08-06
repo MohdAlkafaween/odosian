@@ -50,11 +50,23 @@ export async function processBatch(batchId: string): Promise<void> {
     }
   }
 
+  await finalizeBatchIfDone(batchId);
+}
+
+// Recomputes a batch's overall status once nothing is left pending/running
+// (whether that's because processBatch finished, or because skipping the
+// last remaining item just resolved it). Skipped items count as "handled"
+// for done-ness but don't affect the completed/partial/failed label.
+export async function finalizeBatchIfDone(batchId: string): Promise<void> {
+  const stillActive = await prisma.analysisBatchItem.count({
+    where: { batchId, status: { in: ["pending", "running"] } },
+  });
+  if (stillActive > 0) return;
+
   const batch = await prisma.analysisBatch.findUnique({ where: { id: batchId } });
-  if (batch) {
-    const finalStatus = batch.failedCount === 0 ? "completed" : batch.completedCount === 0 ? "failed" : "partial";
-    await prisma.analysisBatch.update({ where: { id: batchId }, data: { status: finalStatus } });
-  }
+  if (!batch) return;
+  const finalStatus = batch.failedCount === 0 ? "completed" : batch.completedCount === 0 ? "failed" : "partial";
+  await prisma.analysisBatch.update({ where: { id: batchId }, data: { status: finalStatus } });
 }
 
 // Called once on server startup. Any batch left "running" (or with items

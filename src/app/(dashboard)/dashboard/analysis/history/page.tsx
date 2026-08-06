@@ -11,6 +11,8 @@ import { DataTable } from "@/components/ui/data-table";
 import { Pagination } from "@/components/ui/pagination";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/loading";
+import { Tabs } from "@/components/ui/tabs";
+import { BatchList } from "@/components/batch-list";
 
 interface AnalysisRecord {
   id: string;
@@ -145,45 +147,55 @@ export default function AnalysisHistoryPage() {
         </Link>
       </div>
 
-      <Card className="mb-6">
-        <CardBody>
-          <div className="flex gap-4 items-end">
-            <Select
-              label="Filter by Type"
-              value={filterType}
-              onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
-              options={[
-                { value: "", label: "All Types" },
-                { value: "analyze", label: "Analysis" },
-                { value: "enhance", label: "Enhancement" },
-                { value: "post_enhance", label: "Post-Enhancement" },
-                { value: "generate", label: "Generation" },
-                { value: "simulate", label: "Simulation" },
-              ]}
-            />
+      <Tabs tabs={[{ id: "individual", label: "Individual Runs" }, { id: "batches", label: "Batch Runs" }]}>
+        {(activeTab) => activeTab === "batches" ? (
+          <div className="pt-2">
+            <BatchList />
           </div>
-        </CardBody>
-      </Card>
+        ) : (
+          <div className="pt-2">
+            <Card className="mb-6">
+              <CardBody>
+                <div className="flex gap-4 items-end">
+                  <Select
+                    label="Filter by Type"
+                    value={filterType}
+                    onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
+                    options={[
+                      { value: "", label: "All Types" },
+                      { value: "analyze", label: "Analysis" },
+                      { value: "enhance", label: "Enhancement" },
+                      { value: "post_enhance", label: "Post-Enhancement" },
+                      { value: "generate", label: "Generation" },
+                      { value: "simulate", label: "Simulation" },
+                    ]}
+                  />
+                </div>
+              </CardBody>
+            </Card>
 
-      {loading ? (
-        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
-      ) : analyses.length === 0 ? (
-        <EmptyState
-          title="No analyses yet"
-          description="Run an AI analysis on a detection rule to see results here."
-          actionLabel="Start Analysis"
-          onAction={() => router.push("/dashboard/analysis")}
-        />
-      ) : (
-        <>
-          <DataTable columns={columns} data={analyses as unknown as Record<string, unknown>[]} keyField="id" />
-          {totalPages > 1 && (
-            <div className="mt-4">
-              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-            </div>
-          )}
-        </>
-      )}
+            {loading ? (
+              <div className="flex justify-center py-12"><Spinner size="lg" /></div>
+            ) : analyses.length === 0 ? (
+              <EmptyState
+                title="No analyses yet"
+                description="Run an AI analysis on a detection rule to see results here."
+                actionLabel="Start Analysis"
+                onAction={() => router.push("/dashboard/analysis")}
+              />
+            ) : (
+              <>
+                <DataTable columns={columns} data={analyses as unknown as Record<string, unknown>[]} keyField="id" />
+                {totalPages > 1 && (
+                  <div className="mt-4">
+                    <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </Tabs>
     </div>
   );
 }

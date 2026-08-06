@@ -129,6 +129,7 @@ model AnalysisBatch {
   totalCount     Int      @default(0)
   completedCount Int      @default(0)
   failedCount    Int      @default(0)
+  skippedCount   Int      @default(0)
   createdById    String
   createdBy      User     @relation(fields: [createdById], references: [id])
   createdAt      DateTime @default(now())
@@ -143,7 +144,7 @@ model AnalysisBatchItem {
   batch       AnalysisBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
   ruleId      String
   rule        Rule      @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  status      String    @default("pending") // pending | running | completed | failed
+  status      String    @default("pending") // pending | running | completed | failed | skipped
   analysisId  String?
   analysis    Analysis? @relation(fields: [analysisId], references: [id])
   error       String    @default("")
