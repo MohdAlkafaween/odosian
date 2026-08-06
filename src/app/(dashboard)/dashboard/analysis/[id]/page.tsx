@@ -30,6 +30,7 @@ interface AnalysisDetail {
   createdAt: string;
   user: { id: string; name: string } | null;
   rule: { id: string; title: string; query: string; language: string } | null;
+  batchId: string | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -62,6 +63,11 @@ export default function AnalysisDetailPage() {
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-[28px] font-extrabold text-text">{TYPE_LABELS[analysis.analysisType] || analysis.analysisType}</h1>
             <Badge preset="info">{analysis.analysisType}</Badge>
+            {analysis.batchId && (
+              <Link href={`/dashboard/analysis/batches/${analysis.batchId}`}>
+                <Badge preset="info">Part of Batch Run</Badge>
+              </Link>
+            )}
           </div>
           <p className="text-sm text-text-muted">
             {new Date(analysis.createdAt).toLocaleString()} · by {analysis.user?.name || "Unknown"}

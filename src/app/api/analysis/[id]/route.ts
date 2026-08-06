@@ -33,13 +33,18 @@ export const GET = authenticate(async (request: AuthenticatedRequest, context) =
       include: {
         user: { select: { id: true, name: true } },
         rule: { select: { id: true, title: true, query: true, language: true } },
+        batchItems: { select: { batchId: true } },
       },
     });
 
     if (!analysis) return errorResponse("Analysis not found", 404);
 
+    const { batchItems, ...rest } = analysis;
     return NextResponse.json({
-      analysis: parseJsonFields(analysis as unknown as Record<string, unknown>),
+      analysis: {
+        ...parseJsonFields(rest as unknown as Record<string, unknown>),
+        batchId: batchItems[0]?.batchId ?? null,
+      },
     });
   } catch (e) {
     console.error("Failed to fetch analysis:", e);

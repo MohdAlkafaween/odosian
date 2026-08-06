@@ -23,6 +23,7 @@ interface AnalysisRecord {
   createdAt: string;
   user: { id: string; name: string } | null;
   rule: { id: string; title: string } | null;
+  batchId: string | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -91,6 +92,18 @@ export default function AnalysisHistoryPage() {
       render: (r: Record<string, unknown>) => {
         const row = r as unknown as AnalysisRecord;
         return row.rating ? <Badge preset={row.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{row.rating}</Badge> : <span className="text-text-muted">—</span>;
+      },
+    },
+    {
+      key: "source",
+      header: "Source",
+      render: (r: Record<string, unknown>) => {
+        const row = r as unknown as AnalysisRecord;
+        return row.batchId ? (
+          <Link href={`/dashboard/analysis/batches/${row.batchId}`} className="text-xs text-primary hover:underline">
+            Batch Run
+          </Link>
+        ) : <span className="text-xs text-text-muted">Manual</span>;
       },
     },
     {

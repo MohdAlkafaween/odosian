@@ -36,6 +36,7 @@ interface AnalysisRecord {
   latencyMs: number | null;
   createdAt: string;
   user: { id: string; name: string } | null;
+  batchId: string | null;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -703,6 +704,18 @@ export default function RuleDetailPage() {
                         <p className="text-[11px] text-text-muted">
                           {new Date(a.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                           {a.user && ` · ${a.user.name}`}
+                          {a.batchId && (
+                            <>
+                              {" · "}
+                              <Link
+                                href={`/dashboard/analysis/batches/${a.batchId}`}
+                                onClick={(e) => e.stopPropagation()}
+                                className="text-primary hover:underline"
+                              >
+                                Batch Run
+                              </Link>
+                            </>
+                          )}
                         </p>
                       </div>
                     </div>

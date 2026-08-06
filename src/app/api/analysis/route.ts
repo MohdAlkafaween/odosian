@@ -41,13 +41,23 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
         include: {
           user: { select: { id: true, name: true } },
           rule: { select: { id: true, title: true } },
+          // An analysis run as part of a batch has exactly one
+          // AnalysisBatchItem pointing at it — surface that batch so it's
+          // clear this result came from a bulk run, not a one-off action.
+          batchItems: { select: { batchId: true } },
         },
       }),
       prisma.analysis.count({ where }),
     ]);
 
     return NextResponse.json({
-      analyses: analyses.map((a) => parseJsonFields(a as unknown as Record<string, unknown>)),
+      analyses: analyses.map((a) => {
+        const { batchItems, ...rest } = a;
+        return {
+          ...parseJsonFields(rest as unknown as Record<string, unknown>),
+          batchId: batchItems[0]?.batchId ?? null,
+        };
+      }),
       pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
     });
   } catch (e) {
