@@ -44,6 +44,7 @@ const ITEM_STATUS_STYLE: Record<string, string> = {
 const OPERATION_LABEL: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
+  post_enhance: "Post-Enhancement Analysis",
 };
 
 // Shared by the standalone /dashboard/analysis/batches/[id] page and the AI
@@ -59,6 +60,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
   const [startingEnhance, setStartingEnhance] = useState(false);
+  const [startingPostEnhance, setStartingPostEnhance] = useState(false);
   const [skipping, setSkipping] = useState<Set<string>>(new Set());
 
   const fetchBatch = useCallback(async () => {
@@ -142,6 +144,40 @@ export function BatchProgress({ batchId, onStatusChange }: {
     }
   };
 
+  // Mirrors "Analyze After Enhancement" appearing after a single enhance
+  // completes — here it's "score everything this batch successfully
+  // enhanced", fired as its own new batch run. The server derives which
+  // rules/enhancements to use from this batch's completed items directly.
+  const handleBulkPostEnhance = async () => {
+    if (!batch) return;
+    const count = batch.items.filter((i) => i.status === "completed").length;
+    if (count === 0) return;
+    setStartingPostEnhance(true);
+    try {
+      const res = await fetch("/api/analysis/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operation: "post_enhance", sourceBatchId: batch.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addTab({
+          type: "batch_analyze",
+          title: `Analyze After Enhancement: ${count} rules`,
+          batchId: data.batchId,
+          status: "running",
+          statusMessage: `Analyzing ${count} enhanced rules...`,
+        });
+      } else {
+        addToast("error", data.error || "Failed to start post-enhancement analysis");
+      }
+    } catch {
+      addToast("error", "Failed to start post-enhancement analysis");
+    } finally {
+      setStartingPostEnhance(false);
+    }
+  };
+
   // Excludes a rule from this batch — before it's picked up, or after it
   // failed so a later resume/retry doesn't sweep it back in.
   const handleSkip = async (item: BatchItem) => {
@@ -191,6 +227,9 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const canBulkEnhance = batch.operation === "analyze"
     && (batch.status === "completed" || batch.status === "partial")
     && batch.items.some((i) => i.status === "completed");
+  const canBulkPostEnhance = batch.operation === "enhance"
+    && (batch.status === "completed" || batch.status === "partial")
+    && batch.items.some((i) => i.status === "completed");
   const progressPct = batch.totalCount > 0
     ? Math.round(((batch.completedCount + batch.failedCount + batch.skippedCount) / batch.totalCount) * 100)
     : 0;
@@ -205,6 +244,11 @@ export function BatchProgress({ batchId, onStatusChange }: {
           {canBulkEnhance && (
             <Button size="sm" onClick={handleBulkEnhance} loading={startingEnhance}>
               Enhance {batch.items.filter((i) => i.status === "completed").length} Analyzed Rules
+            </Button>
+          )}
+          {canBulkPostEnhance && (
+            <Button size="sm" onClick={handleBulkPostEnhance} loading={startingPostEnhance}>
+              Analyze {batch.items.filter((i) => i.status === "completed").length} After Enhancement
             </Button>
           )}
           {canResume && (

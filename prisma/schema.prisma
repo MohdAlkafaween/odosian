@@ -128,7 +128,7 @@ model Analysis {
 // when the process died can be picked back up with POST .../resume.
 model AnalysisBatch {
   id             String   @id @default(uuid())
-  operation      String   @default("analyze") // analyze | enhance
+  operation      String   @default("analyze") // analyze | enhance | post_enhance
   status         String   @default("pending") // pending | running | completed | partial | failed
   totalCount     Int      @default(0)
   completedCount Int      @default(0)
@@ -151,6 +151,10 @@ model AnalysisBatchItem {
   status      String    @default("pending") // pending | running | completed | failed | skipped
   analysisId  String?
   analysis    Analysis? @relation(fields: [analysisId], references: [id])
+  // For operation "post_enhance" only: the enhance-run Analysis row whose
+  // enhancedQuery this item analyzes. Plain scalar (no relation) — only ever
+  // read by id, never needs to be included/joined.
+  sourceAnalysisId String?
   error       String    @default("")
   startedAt   DateTime?
   completedAt DateTime?

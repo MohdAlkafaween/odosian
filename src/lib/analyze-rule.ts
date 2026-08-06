@@ -57,24 +57,21 @@ Detection Query:
 ${rule.query}`;
 }
 
-// Runs a full "analyze" pass against an existing rule and persists the
-// Analysis row + MITRE mappings. Shared by the single-rule analyze route and
-// the batch processor so both stay in sync.
-export async function analyzeRule(ruleId: string, userId: string) {
-  const rule = await prisma.rule.findUnique({
-    where: { id: ruleId },
-    include: { mitreMappings: true },
-  });
-  if (!rule) throw new Error("Rule not found");
-
-  const userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
-  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
-
+async function persistAnalysis(
+  ruleId: string,
+  userId: string,
+  analysisType: "analyze" | "post_enhance",
+  inputQuery: string,
+  result: AnalyzeResult,
+  modelUsed: string,
+  tokensUsed: number,
+  latencyMs: number
+) {
   const analysis = await prisma.analysis.create({
     data: {
-      ruleId: rule.id,
-      analysisType: "analyze",
-      inputQuery: rule.query,
+      ruleId,
+      analysisType,
+      inputQuery,
       score: result.score || 0,
       rating: result.rating || "",
       feedback: result.feedback || "",
@@ -93,10 +90,10 @@ export async function analyzeRule(ruleId: string, userId: string) {
   });
 
   if (result.mitreMappings?.length > 0) {
-    await prisma.mitreMapping.deleteMany({ where: { ruleId: rule.id } });
+    await prisma.mitreMapping.deleteMany({ where: { ruleId } });
     await prisma.mitreMapping.createMany({
       data: result.mitreMappings.map((m) => ({
-        ruleId: rule.id,
+        ruleId,
         tacticId: m.tacticId,
         tacticName: m.tacticName,
         techniqueId: m.techniqueId,
@@ -107,6 +104,48 @@ export async function analyzeRule(ruleId: string, userId: string) {
       })),
     });
   }
+
+  return analysis;
+}
+
+// Runs a full "analyze" pass against an existing rule and persists the
+// Analysis row + MITRE mappings. Shared by the single-rule analyze route and
+// the batch processor so both stay in sync.
+export async function analyzeRule(ruleId: string, userId: string) {
+  const rule = await prisma.rule.findUnique({
+    where: { id: ruleId },
+    include: { mitreMappings: true },
+  });
+  if (!rule) throw new Error("Rule not found");
+
+  const userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
+  const analysis = await persistAnalysis(rule.id, userId, "analyze", rule.query, result, modelUsed, tokensUsed, latencyMs);
+
+  return { analysis, result };
+}
+
+// Compares a rule's original query against an already-enhanced one and
+// scores the improvement. Shared by the single-rule "Analyze After
+// Enhancement" action and the batch equivalent.
+export async function postEnhanceAnalyzeRule(ruleId: string, userId: string, enhancedQuery: string) {
+  const rule = await prisma.rule.findUnique({
+    where: { id: ruleId },
+    include: { mitreMappings: true },
+  });
+  if (!rule) throw new Error("Rule not found");
+
+  const originalQuery = rule.query;
+  const ruleWithEnhancedQuery = { ...(rule as unknown as Record<string, unknown>), query: enhancedQuery };
+  const userMessage = `This is a POST-ENHANCEMENT analysis. Compare the original query against the enhanced query and evaluate the improvements.
+
+${buildRuleMessage(ruleWithEnhancedQuery, rule.mitreMappings)}
+
+Original Query (before enhancement):
+${originalQuery}`;
+
+  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
+  const analysis = await persistAnalysis(rule.id, userId, "post_enhance", enhancedQuery, result, modelUsed, tokensUsed, latencyMs);
 
   return { analysis, result };
 }

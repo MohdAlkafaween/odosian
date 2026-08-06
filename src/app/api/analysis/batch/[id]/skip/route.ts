@@ -26,14 +26,10 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request, contex
     where: { id: item.id },
     data: { status: "skipped" },
   });
-  await prisma.analysisBatch.update({
-    where: { id },
-    data: {
-      skippedCount: { increment: 1 },
-      ...(item.status === "failed" ? { failedCount: { decrement: 1 } } : {}),
-    },
-  });
 
+  // Recomputes and persists the counter columns too, in case this was the
+  // last item — no manual increment/decrement needed since counts are
+  // always derived from actual item status, never trusted as running totals.
   await finalizeBatchIfDone(id);
 
   return NextResponse.json({ success: true });

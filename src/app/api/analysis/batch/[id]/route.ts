@@ -21,15 +21,22 @@ export const GET = requireRole("DETECTION_ENG", "ADMIN")(async (request, context
   });
   if (!batch) return errorResponse("Batch not found", 404);
 
+  // Derived live from the items we already fetched, not the stored counter
+  // columns — those are only authoritative once the batch finishes (see
+  // finalizeBatchIfDone), so mid-run they'd otherwise show stale counts.
+  const completedCount = batch.items.filter((i) => i.status === "completed").length;
+  const failedCount = batch.items.filter((i) => i.status === "failed").length;
+  const skippedCount = batch.items.filter((i) => i.status === "skipped").length;
+
   return NextResponse.json({
     batch: {
       id: batch.id,
       operation: batch.operation,
       status: batch.status,
       totalCount: batch.totalCount,
-      completedCount: batch.completedCount,
-      failedCount: batch.failedCount,
-      skippedCount: batch.skippedCount,
+      completedCount,
+      failedCount,
+      skippedCount,
       createdBy: batch.createdBy.name,
       createdAt: batch.createdAt,
       updatedAt: batch.updatedAt,

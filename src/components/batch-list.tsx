@@ -34,6 +34,7 @@ const STATUS_PRESET: Record<string, "production" | "reviewed" | "draft" | "depre
 const OPERATION_LABEL: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
+  post_enhance: "Post-Enhancement Analysis",
 };
 
 // The batch run list — used standalone on /dashboard/analysis/batches and
