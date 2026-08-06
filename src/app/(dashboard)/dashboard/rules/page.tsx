@@ -90,6 +90,20 @@ const AI_FLAG_OPTIONS = [
   { value: "none", label: "No AI Activity" },
 ];
 
+// Furthest AI pipeline stage a rule has reached — analyzed < enhanced <
+// deployed (deployed here requires analyze+enhance+push+enabled, see
+// GET /api/rules). Purely derived from aiFlags, never stored/toggled.
+const AI_STAGE_STYLE: Record<string, string> = {
+  analyzed: "bg-primary/20 border-primary text-primary",
+  enhanced: "bg-accent/20 border-accent text-accent",
+  deployed: "bg-success/20 border-success text-success",
+};
+const AI_STAGE_LABEL: Record<string, string> = {
+  analyzed: "Analyzed",
+  enhanced: "Enhanced",
+  deployed: "Deployed",
+};
+
 const CATEGORY_COLORS: Record<string, string> = {};
 const PALETTE = ["#4CBDFA", "#A78BFA", "#34D399", "#FBBF24", "#FB7185", "#F97316", "#6ED1CA", "#E879F9"];
 function getCategoryColor(category: string): string {
@@ -117,8 +131,6 @@ export default function RulesListPage() {
   const [category, setCategory] = useState("");
   const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>([{ value: "", label: "All Categories" }]);
   const [covered, setCovered] = useState("");
-  const [coverage, setCoverage] = useState<{ covered: number; total: number } | null>(null);
-  const [togglingCovered, setTogglingCovered] = useState<Set<string>>(new Set());
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
@@ -166,7 +178,6 @@ export default function RulesListPage() {
       if (res.ok) {
         setRules(data.rules);
         setTotalPages(data.pagination.totalPages);
-        if (data.coverage) setCoverage(data.coverage);
       }
     } catch {
       addToast("error", "Failed to load rules");
@@ -174,30 +185,6 @@ export default function RulesListPage() {
       setLoading(false);
     }
   }, [page, search, severity, status, ruleType, language, category, covered, sortBy, sortDir, addToast]);
-
-  const toggleCovered = async (rule: RuleRow) => {
-    setTogglingCovered((prev) => new Set(prev).add(rule.id));
-    const nextCovered = !rule.covered;
-    setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: nextCovered } : r)));
-    try {
-      const res = await fetch(`/api/rules/${rule.id}/covered`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ covered: nextCovered }),
-      });
-      if (!res.ok) {
-        setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: rule.covered } : r)));
-        addToast("error", "Failed to update coverage");
-      } else {
-        setCoverage((prev) => prev ? { ...prev, covered: prev.covered + (nextCovered ? 1 : -1) } : prev);
-      }
-    } catch {
-      setRules((prev) => prev.map((r) => (r.id === rule.id ? { ...r, covered: rule.covered } : r)));
-      addToast("error", "Failed to update coverage");
-    } finally {
-      setTogglingCovered((prev) => { const next = new Set(prev); next.delete(rule.id); return next; });
-    }
-  };
 
   useEffect(() => {
     fetchRules();
@@ -299,24 +286,24 @@ export default function RulesListPage() {
 
   const columns = [
     {
-      key: "covered",
+      key: "aiStage",
       header: "",
-      render: (row: RuleRow) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); toggleCovered(row); }}
-          disabled={togglingCovered.has(row.id)}
-          title={row.covered ? "Covered — click to unmark" : "Mark as covered"}
-          className={`w-6 h-6 rounded-full border flex items-center justify-center transition-all shrink-0 ${
-            row.covered
-              ? "bg-success/20 border-success text-success"
-              : "bg-transparent border-border text-transparent hover:border-success/50 hover:text-success/30"
-          } ${togglingCovered.has(row.id) ? "opacity-50" : ""}`}
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
-            <path d="M20 6L9 17l-5-5" />
-          </svg>
-        </button>
-      ),
+      render: (row: RuleRow) => {
+        const stage = row.aiFlags?.deployed ? "deployed" : row.aiFlags?.enhanced ? "enhanced" : row.aiFlags?.analyzed ? "analyzed" : null;
+        if (!stage) {
+          return <div className="w-6 h-6 rounded-full border border-border shrink-0" />;
+        }
+        return (
+          <div
+            title={AI_STAGE_LABEL[stage]}
+            className={`w-6 h-6 rounded-full border flex items-center justify-center shrink-0 ${AI_STAGE_STYLE[stage]}`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+        );
+      },
     },
     {
       key: "title",
@@ -397,20 +384,6 @@ export default function RulesListPage() {
           <p className="text-sm text-text-muted mt-1">
             Manage your Elastic SIEM detection rules
           </p>
-          {coverage && coverage.total > 0 && (
-            <div className="flex items-center gap-2 mt-2">
-              <div className="w-40 h-1.5 rounded-full bg-surface-light overflow-hidden">
-                <div
-                  className="h-full bg-success rounded-full transition-all"
-                  style={{ width: `${Math.round((coverage.covered / coverage.total) * 100)}%` }}
-                />
-              </div>
-              <span className="text-xs text-text-muted">
-                <span className="text-success font-semibold">{coverage.covered}</span> of {coverage.total} covered
-                {" "}({Math.round((coverage.covered / coverage.total) * 100)}%)
-              </span>
-            </div>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setShowImport(true)}>Import</Button>

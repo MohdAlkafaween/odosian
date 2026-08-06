@@ -49,7 +49,7 @@ export const GET = authenticate(async (request: AuthenticatedRequest, context) =
           enhanced: types.has("enhance"),
           feedback: types.has("feedback"),
           generated: rule.source === "generated",
-          deployed: types.has("enhance") && !!rule.elasticRuleId,
+          deployed: types.has("analyze") && types.has("enhance") && !!rule.elasticRuleId && rule.elasticEnabled,
         },
       },
     });

@@ -286,6 +286,7 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
         where: { id },
         data: {
           elasticRuleId,
+          elasticEnabled: enabled,
           ...(autoCover ? { covered: true, coveredAt: new Date() } : {}),
         },
       });

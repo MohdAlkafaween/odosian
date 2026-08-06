@@ -57,6 +57,9 @@ model Rule {
   falsePositives     String   @default("[]")
   references         String   @default("[]")
   elasticRuleId      String?
+  // Last known enabled/disabled state as of the last push — not live-synced
+  // with Elastic, same caveat as elasticRuleId itself.
+  elasticEnabled     Boolean  @default(false)
   interval           String   @default("5m")
   fromTime           String   @default("now-6m")
   maxSignals         Int      @default(100)
