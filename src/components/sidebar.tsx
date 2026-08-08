@@ -160,7 +160,14 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";
-    return pathname.startsWith(href);
+    if (!pathname.startsWith(href)) return false;
+    // Only the most specific (longest) matching nav item lights up — without
+    // this, visiting /dashboard/analysis/history would also highlight
+    // /dashboard/analysis since it's a prefix of the same path.
+    const longestMatch = navItems
+      .filter((item) => item.href !== "/dashboard" && pathname.startsWith(item.href))
+      .sort((a, b) => b.href.length - a.href.length)[0];
+    return longestMatch?.href === href;
   };
 
   const handleNavClick = () => {
