@@ -26,6 +26,15 @@ interface AnalysisRecord {
   batchId: string | null;
 }
 
+const RATING_TEXT_COLOR: Record<string, string> = {
+  "A+": "text-success",
+  A: "text-success",
+  B: "text-accent",
+  C: "text-severity-medium",
+  D: "text-severity-high",
+  F: "text-severity-critical",
+};
+
 const TYPE_LABELS: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
@@ -75,15 +84,8 @@ export default function AnalysisHistoryPage() {
         if (row.analysisType === "enhance" || !row.score) {
           return <span className="text-text-muted">—</span>;
         }
-        return (
-          <span className={`font-bold ${
-            row.score >= 80 ? "text-success" :
-            row.score >= 60 ? "text-info" :
-            row.score >= 40 ? "text-warning" : "text-danger"
-          }`}>
-            {row.score}
-          </span>
-        );
+        const color = row.rating ? RATING_TEXT_COLOR[row.rating] ?? "text-text-secondary" : "text-text-secondary";
+        return <span className={`font-bold ${color}`}>{row.score}</span>;
       },
     },
     {

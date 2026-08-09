@@ -41,6 +41,15 @@ const ITEM_STATUS_STYLE: Record<string, string> = {
   skipped: "text-text-muted",
 };
 
+const RATING_TEXT_COLOR: Record<string, string> = {
+  "A+": "text-success",
+  A: "text-success",
+  B: "text-accent",
+  C: "text-severity-medium",
+  D: "text-severity-high",
+  F: "text-severity-critical",
+};
+
 const OPERATION_LABEL: Record<string, string> = {
   analyze: "Analysis",
   enhance: "Enhancement",
@@ -302,7 +311,11 @@ export function BatchProgress({ batchId, onStatusChange }: {
                     {item.status === "running" && <Spinner size="sm" />}
                     {" "}{item.status}
                   </td>
-                  {!isEnhance && <td className="px-4 py-3 text-text-secondary">{item.score ?? "—"}</td>}
+                  {!isEnhance && (
+                    <td className={`px-4 py-3 font-medium ${item.rating ? RATING_TEXT_COLOR[item.rating] ?? "text-text-secondary" : "text-text-secondary"}`}>
+                      {item.score ?? "—"}
+                    </td>
+                  )}
                   {!isEnhance && (
                     <td className="px-4 py-3">
                       {item.rating ? <Badge preset={item.rating as "A+" | "A" | "B" | "C" | "D" | "F"}>{item.rating}</Badge> : "—"}
