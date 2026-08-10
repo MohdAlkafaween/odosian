@@ -13,6 +13,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { BatchList } from "@/components/batch-list";
+import { DeploymentList } from "@/components/deployment-list";
 
 interface AnalysisRecord {
   id: string;
@@ -162,10 +163,14 @@ export default function AnalysisHistoryPage() {
         </Link>
       </div>
 
-      <Tabs tabs={[{ id: "individual", label: "Individual Runs" }, { id: "batches", label: "Batch Runs" }]}>
+      <Tabs tabs={[{ id: "individual", label: "Individual Runs" }, { id: "batches", label: "Batch Runs" }, { id: "deployments", label: "Deployments" }]}>
         {(activeTab) => activeTab === "batches" ? (
           <div className="pt-2">
             <BatchList />
+          </div>
+        ) : activeTab === "deployments" ? (
+          <div className="pt-2">
+            <DeploymentList />
           </div>
         ) : (
           <div className="pt-2">

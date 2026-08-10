@@ -8,6 +8,7 @@ import { Card, CardBody } from "@/components/ui/card";
 import { CodeBlock } from "@/components/ui/code-block";
 import { PageLoader } from "@/components/ui/loading";
 import { ScoreGauge } from "@/components/ui/score-gauge";
+import { DeploymentList } from "@/components/deployment-list";
 
 interface AnalysisRecord {
   id: string;
@@ -418,6 +419,11 @@ export default function RuleAnalysisHistoryPage() {
           })}
         </div>
       )}
+
+      <div className="mt-8">
+        <h2 className="text-lg font-bold text-text mb-3">Deployments to Elastic</h2>
+        <DeploymentList ruleId={params.id as string} />
+      </div>
     </div>
   );
 }
