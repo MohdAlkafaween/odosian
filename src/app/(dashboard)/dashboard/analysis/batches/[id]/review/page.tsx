@@ -54,6 +54,7 @@ export default function BatchReviewPage() {
   const [selectedConn, setSelectedConn] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
   const [working, setWorking] = useState<Set<string>>(new Set());
+  const [rowErrors, setRowErrors] = useState<Map<string, string>>(new Map());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +117,11 @@ export default function BatchReviewPage() {
       return;
     }
     setWorking((prev) => new Set([...prev, ...itemIds]));
+    setRowErrors((prev) => {
+      const next = new Map(prev);
+      for (const itemId of itemIds) next.delete(itemId);
+      return next;
+    });
     try {
       const res = await fetch(`/api/analysis/batch/${batchId}/review`, {
         method: "POST",
@@ -132,7 +138,8 @@ export default function BatchReviewPage() {
         addToast("error", data.error || "Action failed");
         return;
       }
-      const failed = (data.results as Array<{ itemId: string; error?: string }>).filter((r) => r.error);
+      const results = data.results as Array<{ itemId: string; error?: string }>;
+      const failed = results.filter((r) => r.error);
       if (failed.length > 0) {
         addToast("error", `${failed.length} of ${itemIds.length} failed — see rows for details`);
       } else {
@@ -140,9 +147,16 @@ export default function BatchReviewPage() {
           ? `Applied and deployed ${data.deployedCount} rule(s)`
           : `Applied ${data.appliedCount} rule(s)`);
       }
+      setRowErrors((prev) => {
+        const next = new Map(prev);
+        for (const r of results) {
+          if (r.error) next.set(r.itemId, r.error); else next.delete(r.itemId);
+        }
+        return next;
+      });
       setSelected((prev) => {
         const next = new Set(prev);
-        for (const r of data.results as Array<{ itemId: string; error?: string }>) {
+        for (const r of results) {
           if (!r.error) next.delete(r.itemId);
         }
         return next;
@@ -243,6 +257,7 @@ export default function BatchReviewPage() {
               const isWorking = working.has(item.itemId);
               const isExpanded = expanded.has(item.itemId);
               const severityChanged = item.newSeverity !== item.originalSeverity;
+              const rowError = rowErrors.get(item.itemId);
 
               return (
                 <Card key={item.itemId}>
@@ -279,6 +294,13 @@ export default function BatchReviewPage() {
                       {isExpanded ? "Hide diff" : "View diff"}
                     </button>
                   </CardHeader>
+
+                  {rowError && (
+                    <div className="mx-6 mt-4 flex items-start gap-2 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 mt-0.5"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
+                      <span>{rowError}</span>
+                    </div>
+                  )}
 
                   {isExpanded && (
                     <CardBody className="space-y-4">

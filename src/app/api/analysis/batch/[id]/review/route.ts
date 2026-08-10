@@ -119,7 +119,10 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request, contex
 
   const items = await prisma.analysisBatchItem.findMany({
     where: { id: { in: itemIds }, batchId: id, status: "completed" },
-    include: { analysis: { select: { enhanceResult: true } } },
+    include: {
+      analysis: { select: { enhanceResult: true } },
+      rule: { select: { query: true } },
+    },
   });
 
   const ip = getClientIp(request);
@@ -150,22 +153,42 @@ export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request, contex
         references: enhance.references,
         indexPatterns: enhance.indexPatterns,
       };
-      await applyEnhancementToRule(item.ruleId, request.user.id, request.user.role === "ADMIN", applyInput, ip);
-
-      let deployed = false;
-      if (body.action === "apply_and_deploy") {
-        await pushRuleToElastic(item.ruleId, body.connectionId!, !!body.enabled, request.user.id, ip);
-        deployed = true;
+      // Skip re-applying if a previous attempt already got this far (e.g.
+      // retrying after the deploy step failed) — otherwise every retry
+      // stacks another identical RuleVersion snapshot and audit entry for
+      // content that's already on the rule.
+      const alreadyApplied = item.rule.query === enhance.enhancedQuery;
+      if (!alreadyApplied) {
+        await applyEnhancementToRule(item.ruleId, request.user.id, request.user.role === "ADMIN", applyInput, ip);
       }
 
-      results.push({ itemId: item.id, ruleId: item.ruleId, applied: true, deployed });
+      // Apply having succeeded is true regardless of what happens next — a
+      // later deploy failure must not report this item as unapplied, or a
+      // retry re-runs Apply (a second RuleVersion, a second audit entry)
+      // when only the deploy actually needs retrying.
+      try {
+        let deployed = false;
+        if (body.action === "apply_and_deploy") {
+          await pushRuleToElastic(item.ruleId, body.connectionId!, !!body.enabled, request.user.id, ip);
+          deployed = true;
+        }
+        results.push({ itemId: item.id, ruleId: item.ruleId, applied: true, deployed });
+      } catch (e) {
+        results.push({
+          itemId: item.id,
+          ruleId: item.ruleId,
+          applied: true,
+          deployed: false,
+          error: e instanceof Error ? e.message : "Failed to deploy",
+        });
+      }
     } catch (e) {
       results.push({
         itemId: item.id,
         ruleId: item.ruleId,
         applied: false,
         deployed: false,
-        error: e instanceof Error ? e.message : "Failed",
+        error: e instanceof Error ? e.message : "Failed to apply",
       });
     }
   }
