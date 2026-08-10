@@ -23,12 +23,14 @@ interface BatchRow {
   [key: string]: unknown;
 }
 
-const STATUS_PRESET: Record<string, "production" | "reviewed" | "draft" | "deprecated"> = {
+const STATUS_PRESET: Record<string, "production" | "reviewed" | "draft" | "deprecated" | "reject"> = {
   completed: "production",
   running: "reviewed",
   pending: "draft",
+  paused: "draft",
   partial: "deprecated",
   failed: "deprecated",
+  cancelled: "reject",
 };
 
 const OPERATION_LABEL: Record<string, string> = {

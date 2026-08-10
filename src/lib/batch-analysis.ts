@@ -49,6 +49,13 @@ export async function processBatch(batchId: string): Promise<void> {
   });
 
   for (const item of items) {
+    // Checked fresh every iteration (not just once) so a pause/stop request
+    // that lands while this loop is mid-flight on another item takes effect
+    // before the next one is claimed, without needing any in-process signal —
+    // the pause/stop routes just write the status column from outside.
+    const control = await prisma.analysisBatch.findUnique({ where: { id: batchId }, select: { status: true } });
+    if (control?.status === "paused" || control?.status === "cancelled") break;
+
     // Atomic claim: only succeeds if the item is still "pending" right now.
     // If another process already claimed it since the findMany above, this
     // affects 0 rows and we skip it — the two processes can never both
@@ -74,6 +81,30 @@ export async function processBatch(batchId: string): Promise<void> {
         data: { status: "failed", error: e instanceof Error ? e.message : "Analysis failed", completedAt: new Date() },
       });
     }
+  }
+
+  const finalState = await prisma.analysisBatch.findUnique({ where: { id: batchId }, select: { status: true } });
+
+  if (finalState?.status === "cancelled") {
+    // Sweep up anything still "pending" — either the stop request's own
+    // sweep raced with an item finishing, or this loop broke before ever
+    // claiming it. Either way it's not going to run.
+    await prisma.analysisBatchItem.updateMany({
+      where: { batchId, status: "pending" },
+      data: { status: "skipped" },
+    });
+    const counts = await computeBatchCounts(batchId);
+    await prisma.analysisBatch.update({
+      where: { id: batchId },
+      data: { completedCount: counts.completed, failedCount: counts.failed, skippedCount: counts.skipped },
+    });
+    return;
+  }
+
+  if (finalState?.status === "paused") {
+    // Leave remaining items "pending" exactly as they are — resuming just
+    // re-runs processBatch, which picks them straight back up.
+    return;
   }
 
   await finalizeBatchIfDone(batchId);

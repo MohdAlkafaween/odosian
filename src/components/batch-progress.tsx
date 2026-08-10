@@ -68,6 +68,8 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
+  const [pausing, setPausing] = useState(false);
+  const [stopping, setStopping] = useState(false);
   const [startingEnhance, setStartingEnhance] = useState(false);
   const [startingPostEnhance, setStartingPostEnhance] = useState(false);
   const [skipping, setSkipping] = useState<Set<string>>(new Set());
@@ -89,7 +91,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
   }, [fetchBatch]);
 
   useEffect(() => {
-    if (!batch || batch.status === "completed") return;
+    if (!batch || ["completed", "paused", "cancelled"].includes(batch.status)) return;
     const interval = setInterval(fetchBatch, 2000);
     return () => clearInterval(interval);
   }, [batch, fetchBatch]);
@@ -228,11 +230,50 @@ export function BatchProgress({ batchId, onStatusChange }: {
     }
   };
 
+  const handlePause = async () => {
+    setPausing(true);
+    try {
+      const res = await fetch(`/api/analysis/batch/${batchId}/pause`, { method: "POST" });
+      if (res.ok) {
+        addToast("info", "Paused — remaining rules stayed untouched");
+        fetchBatch();
+      } else {
+        const data = await res.json();
+        addToast("error", data.error || "Failed to pause batch");
+      }
+    } catch {
+      addToast("error", "Failed to pause batch");
+    } finally {
+      setPausing(false);
+    }
+  };
+
+  const handleStop = async () => {
+    if (!confirm("Stop this batch? Every rule not yet processed will be marked skipped and won't run.")) return;
+    setStopping(true);
+    try {
+      const res = await fetch(`/api/analysis/batch/${batchId}/stop`, { method: "POST" });
+      if (res.ok) {
+        addToast("info", "Batch stopped");
+        fetchBatch();
+      } else {
+        const data = await res.json();
+        addToast("error", data.error || "Failed to stop batch");
+      }
+    } catch {
+      addToast("error", "Failed to stop batch");
+    } finally {
+      setStopping(false);
+    }
+  };
+
   if (loading) return <div className="flex justify-center py-12"><Spinner size="lg" /></div>;
   if (!batch) return <p className="text-text-muted">Batch not found.</p>;
 
   const isEnhance = batch.operation === "enhance";
   const canResume = batch.items.some((i) => i.status === "pending" || i.status === "running" || i.status === "failed");
+  const canPause = batch.status === "pending" || batch.status === "running";
+  const canStop = batch.status === "pending" || batch.status === "running" || batch.status === "paused";
   const canBulkEnhance = batch.operation === "analyze"
     && (batch.status === "completed" || batch.status === "partial")
     && batch.items.some((i) => i.status === "completed");
@@ -268,9 +309,19 @@ export function BatchProgress({ batchId, onStatusChange }: {
               Analyze {batch.items.filter((i) => i.status === "completed").length} After Enhancement
             </Button>
           )}
+          {canPause && (
+            <Button size="sm" variant="outline" onClick={handlePause} loading={pausing}>
+              Pause
+            </Button>
+          )}
+          {canStop && (
+            <Button size="sm" variant="danger" onClick={handleStop} loading={stopping}>
+              Stop
+            </Button>
+          )}
           {canResume && (
             <Button size="sm" variant="outline" onClick={handleResume} loading={resuming}>
-              {batch.status === "pending" || batch.status === "running" ? "Resume Now" : "Retry Failed"}
+              {batch.status === "pending" || batch.status === "running" ? "Resume Now" : batch.status === "paused" ? "Resume" : "Retry Failed"}
             </Button>
           )}
         </div>
@@ -279,7 +330,13 @@ export function BatchProgress({ batchId, onStatusChange }: {
       <Card className="mb-6">
         <CardBody>
           <div className="flex items-center gap-4 mb-3">
-            <Badge preset={batch.status === "completed" ? "production" : batch.status === "running" ? "reviewed" : batch.status === "partial" || batch.status === "failed" ? "deprecated" : "draft"}>
+            <Badge preset={
+              batch.status === "completed" ? "production" :
+              batch.status === "running" ? "reviewed" :
+              batch.status === "partial" || batch.status === "failed" ? "deprecated" :
+              batch.status === "cancelled" ? "reject" :
+              "draft"
+            }>
               {batch.status}
             </Badge>
             <span className="text-sm text-text-secondary">
