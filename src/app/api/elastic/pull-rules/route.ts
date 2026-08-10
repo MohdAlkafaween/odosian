@@ -51,6 +51,18 @@ interface ElasticRule {
   timeline_id?: string;
   timeline_title?: string;
   investigation_fields?: { field_names: string[] };
+  // type: "threshold" — was previously read off nowhere, so it round-tripped
+  // as ruleType "threshold" with none of the config that makes it a
+  // threshold rule, which is what made every push of one fail.
+  threshold?: { field?: string[]; value: number };
+  // type: "new_terms" — same story.
+  new_terms_fields?: string[];
+  history_window_start?: string;
+  // type: "threat_match" — same story; only the first OR-group's entries are
+  // kept (see the threatMapping field comment on the Rule model).
+  threat_index?: string[];
+  threat_query?: string;
+  threat_mapping?: Array<{ entries: Array<{ field: string; value: string }> }>;
 }
 
 interface FindRulesResponse {
@@ -204,6 +216,15 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
             timelineId: er.timeline_id || "",
             timelineTitle: er.timeline_title || "",
             investigationFields: JSON.stringify(er.investigation_fields?.field_names || []),
+            thresholdField: (er.threshold?.field || []).join(", "),
+            thresholdValue: er.threshold?.value ?? 1,
+            newTermsFields: (er.new_terms_fields || []).join(", "),
+            historyWindowStart: er.history_window_start || "now-7d",
+            threatIndex: (er.threat_index || []).join(", "),
+            threatQuery: er.threat_query || "*:*",
+            threatMapping: JSON.stringify(
+              (er.threat_mapping?.[0]?.entries || []).map((e) => ({ field: e.field, value: e.value }))
+            ),
             source: "elastic",
           };
 

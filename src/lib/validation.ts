@@ -59,7 +59,7 @@ export const ruleCreateSchema = z.object({
     .string()
     .min(1, "Detection query is required")
     .max(10000),
-  ruleType: z.enum(["query", "eql", "threshold", "new_terms", "machine_learning"]),
+  ruleType: z.enum(["query", "eql", "threshold", "new_terms", "machine_learning", "indicator_match"]),
   severity: z.enum(["low", "medium", "high", "critical"]),
   language: z.enum(["kuery", "eql", "lucene", "esql"]),
   riskScore: z.number().int().min(0).max(100).default(50),
@@ -87,6 +87,16 @@ export const ruleCreateSchema = z.object({
   timelineId: z.string().max(200).default(""),
   timelineTitle: z.string().max(200).default(""),
   investigationFields: z.array(z.string().max(200)).max(50).default([]),
+  // ruleType "threshold" only.
+  thresholdField: z.string().max(500).default(""),
+  thresholdValue: z.number().int().min(1).default(1),
+  // ruleType "new_terms" only.
+  newTermsFields: z.string().max(500).default(""),
+  historyWindowStart: z.string().max(50).default("now-7d"),
+  // ruleType "indicator_match" only.
+  threatIndex: z.string().max(500).default(""),
+  threatQuery: z.string().max(2000).default("*:*"),
+  threatMapping: z.string().max(5000).default("[]"),
 });
 
 export const ruleUpdateSchema = ruleCreateSchema.partial();

@@ -59,6 +59,13 @@ export interface RuleFormData {
   requiredFields: Array<{ name: string; type: string }>;
   investigationFields: string[];
   customFields?: Array<{ fieldName: string; fieldValue: string; fieldType: string }>;
+  thresholdField: string;
+  thresholdValue: number;
+  newTermsFields: string;
+  historyWindowStart: string;
+  threatIndex: string;
+  threatQuery: string;
+  threatMapping: string;
 }
 
 interface RuleFormProps {
@@ -75,6 +82,7 @@ const RULE_TYPES = [
   { value: "threshold", label: "Threshold" },
   { value: "new_terms", label: "New Terms" },
   { value: "machine_learning", label: "Machine Learning" },
+  { value: "indicator_match", label: "Indicator Match" },
 ];
 
 const SEVERITIES = [
@@ -125,7 +133,35 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
     relatedIntegrations: initialData?.relatedIntegrations || [],
     requiredFields: initialData?.requiredFields || [],
     investigationFields: initialData?.investigationFields || [],
+    thresholdField: initialData?.thresholdField || "",
+    thresholdValue: initialData?.thresholdValue ?? 1,
+    newTermsFields: initialData?.newTermsFields || "",
+    historyWindowStart: initialData?.historyWindowStart || "now-7d",
+    threatIndex: initialData?.threatIndex || "",
+    threatQuery: initialData?.threatQuery || "*:*",
+    threatMapping: initialData?.threatMapping || "[]",
   });
+
+  const [threatMappingRows, setThreatMappingRows] = useState<Array<{ field: string; value: string }>>(() => {
+    try {
+      const parsed = JSON.parse(initialData?.threatMapping || "[]");
+      return Array.isArray(parsed) && parsed.length > 0 ? parsed : [{ field: "", value: "" }];
+    } catch {
+      return [{ field: "", value: "" }];
+    }
+  });
+
+  const updateThreatMappingRow = (index: number, key: "field" | "value", val: string) => {
+    const next = threatMappingRows.map((r, i) => (i === index ? { ...r, [key]: val } : r));
+    setThreatMappingRows(next);
+    setForm((f) => ({ ...f, threatMapping: JSON.stringify(next.filter((r) => r.field && r.value)) }));
+  };
+  const addThreatMappingRow = () => setThreatMappingRows([...threatMappingRows, { field: "", value: "" }]);
+  const removeThreatMappingRow = (index: number) => {
+    const next = threatMappingRows.filter((_, i) => i !== index);
+    setThreatMappingRows(next.length > 0 ? next : [{ field: "", value: "" }]);
+    setForm((f) => ({ ...f, threatMapping: JSON.stringify(next.filter((r) => r.field && r.value)) }));
+  };
 
   const [tagInput, setTagInput] = useState("");
   const [clientSuggestions, setClientSuggestions] = useState<string[]>([]);
@@ -333,6 +369,96 @@ export function RuleForm({ initialData, onSubmit, submitLabel, loading, onCancel
               }
             />
           </div>
+
+          {form.ruleType === "threshold" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
+              <Input
+                label="Group By Field(s)"
+                value={form.thresholdField}
+                onChange={(e) => setForm({ ...form, thresholdField: e.target.value })}
+                placeholder="e.g. source.ip, user.name (comma-separated, optional)"
+              />
+              <Input
+                label="Minimum Count"
+                type="number"
+                value={String(form.thresholdValue)}
+                onChange={(e) => setForm({ ...form, thresholdValue: Math.max(1, parseInt(e.target.value) || 1) })}
+              />
+              <p className="md:col-span-2 text-xs text-text-muted -mt-2">
+                Alerts once matching events in a single window reach this count, grouped by the field(s) above — leave the field blank to count every match without grouping.
+              </p>
+            </div>
+          )}
+
+          {form.ruleType === "new_terms" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-border">
+              <Input
+                label="New Terms Field(s)"
+                value={form.newTermsFields}
+                onChange={(e) => setForm({ ...form, newTermsFields: e.target.value })}
+                placeholder="e.g. user.name, host.name (required, comma-separated)"
+              />
+              <Input
+                label="History Window Start"
+                value={form.historyWindowStart}
+                onChange={(e) => setForm({ ...form, historyWindowStart: e.target.value })}
+                placeholder="e.g. now-7d"
+              />
+              <p className="md:col-span-2 text-xs text-text-muted -mt-2">
+                Alerts when a value for the field(s) above appears that hasn&apos;t been seen anywhere in the history window before now.
+              </p>
+            </div>
+          )}
+
+          {form.ruleType === "indicator_match" && (
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <Input
+                  label="Threat Intel Index"
+                  value={form.threatIndex}
+                  onChange={(e) => setForm({ ...form, threatIndex: e.target.value })}
+                  placeholder="e.g. logs-ti_*.latest (required, comma-separated)"
+                />
+                <Input
+                  label="Threat Intel Query"
+                  value={form.threatQuery}
+                  onChange={(e) => setForm({ ...form, threatQuery: e.target.value })}
+                  placeholder="*:*"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-text mb-1.5">Field Mapping (required)</label>
+                <p className="text-xs text-text-muted mb-2">
+                  Maps a field in this rule&apos;s query results (left) to the matching field in the threat intel index (right). All rows must match for an indicator to be considered a hit.
+                </p>
+                <div className="space-y-2">
+                  {threatMappingRows.map((row, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                      <Input
+                        value={row.field}
+                        onChange={(e) => updateThreatMappingRow(i, "field", e.target.value)}
+                        placeholder="e.g. source.ip"
+                        className="flex-1"
+                      />
+                      <span className="text-text-muted text-sm shrink-0">maps to</span>
+                      <Input
+                        value={row.value}
+                        onChange={(e) => updateThreatMappingRow(i, "value", e.target.value)}
+                        placeholder="e.g. threat.indicator.ip"
+                        className="flex-1"
+                      />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => removeThreatMappingRow(i)}>
+                        Remove
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="mt-2" onClick={addThreatMappingRow}>
+                  + Add Field Mapping
+                </Button>
+              </div>
+            </div>
+          )}
         </CardBody>
       </Card>
 

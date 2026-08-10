@@ -43,6 +43,15 @@ interface ElasticRulePayload {
   required_fields?: Array<{ name: string; type: string }>;
   timeline_id?: string;
   timeline_title?: string;
+  // type: "threshold" only — both required by Elastic when present.
+  threshold?: { field: string[]; value: number };
+  // type: "new_terms" only — both required by Elastic when present.
+  new_terms_fields?: string[];
+  history_window_start?: string;
+  // type: "threat_match" only — all three required by Elastic when present.
+  threat_index?: string[];
+  threat_query?: string;
+  threat_mapping?: Array<{ entries: Array<{ field: string; type: "mapping"; value: string }> }>;
 }
 
 function mapLanguage(lang: string): string {
@@ -61,6 +70,18 @@ function mapRuleType(ruleType: string, language: string): string {
   if (ruleType === "esql" || language === "esql") return "esql";
   if (ruleType === "threshold") return "threshold";
   if (ruleType === "machine_learning") return "machine_learning";
+  // Odosian's own naming for this type is "indicator_match" (matching how
+  // pull-rules maps Elastic's "threat_match" on the way in) — Elastic's wire
+  // format itself calls it "threat_match". Without this case it fell through
+  // to "query" below: pushed with no error, but silently missing its entire
+  // threat-matching config (threat_index/threat_query/threat_mapping), which
+  // is worse than a loud failure — the rule exists in Elastic and looks
+  // fine, it just doesn't do what it's supposed to.
+  if (ruleType === "indicator_match") return "threat_match";
+  // Was also missing — fell through to "query" the same way indicator_match
+  // did, just without a visible symptom yet, since nothing sent
+  // new_terms_fields to make Kibana reject it.
+  if (ruleType === "new_terms") return "new_terms";
   return "query";
 }
 
@@ -187,6 +208,61 @@ export async function pushRuleToElastic(
   if (rule.timelineId) payload.timeline_id = rule.timelineId;
   if (rule.timelineTitle) payload.timeline_title = rule.timelineTitle;
   if (investigationFields.length > 0) payload.investigation_fields = { field_names: investigationFields };
+
+  // Elastic requires type-specific config for these three rule types — sent
+  // as their own top-level keys rather than folded into `query`/`language`.
+  // Guarded here (before ever reaching Kibana) rather than letting the API
+  // reject it with a message like "threshold: Required" that doesn't say
+  // which rule or what to do about it.
+  if (elasticType === "threshold") {
+    if (!rule.thresholdValue || rule.thresholdValue < 1) {
+      throw new HttpError(
+        `"${rule.title}" is a Threshold rule with no minimum count configured — edit the rule and set one before deploying.`,
+        400
+      );
+    }
+    const thresholdFields = rule.thresholdField
+      ? rule.thresholdField.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    payload.threshold = { field: thresholdFields, value: rule.thresholdValue };
+  }
+
+  if (elasticType === "new_terms") {
+    const newTermsFields = rule.newTermsFields
+      ? rule.newTermsFields.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    if (newTermsFields.length === 0) {
+      throw new HttpError(
+        `"${rule.title}" is a New Terms rule with no fields configured — edit the rule and set at least one field before deploying.`,
+        400
+      );
+    }
+    payload.new_terms_fields = newTermsFields;
+    payload.history_window_start = rule.historyWindowStart || "now-7d";
+  }
+
+  if (elasticType === "threat_match") {
+    const threatIndexPatterns = rule.threatIndex
+      ? rule.threatIndex.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    let mappingEntries: Array<{ field: string; value: string }> = [];
+    try {
+      mappingEntries = JSON.parse(rule.threatMapping || "[]");
+    } catch {
+      mappingEntries = [];
+    }
+    if (threatIndexPatterns.length === 0 || mappingEntries.length === 0) {
+      throw new HttpError(
+        `"${rule.title}" is an Indicator Match rule missing its threat index or field mapping — edit the rule and configure both before deploying.`,
+        400
+      );
+    }
+    payload.threat_index = threatIndexPatterns;
+    payload.threat_query = rule.threatQuery || "*:*";
+    payload.threat_mapping = [
+      { entries: mappingEntries.map((m) => ({ field: m.field, type: "mapping" as const, value: m.value })) },
+    ];
+  }
 
   const baseUrl = connection.kibanaUrl.replace(/\/+$/, "");
   const spacePrefix = connection.spaceId && connection.spaceId !== "default"

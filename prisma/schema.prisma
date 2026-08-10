@@ -74,6 +74,35 @@ model Rule {
   timelineId         String   @default("")
   timelineTitle      String   @default("")
   investigationFields String  @default("[]")
+  // ruleType "threshold" only — which field(s) to group matching events by
+  // before counting (comma-separated; empty means no grouping, just count
+  // every match) and the minimum count within the rule's window to fire.
+  // Both are required by Elastic's detection_engine API whenever
+  // type: "threshold" — sending neither is what "threshold: Required" means.
+  thresholdField     String   @default("")
+  thresholdValue     Int      @default(1)
+  // ruleType "new_terms" only — the field(s) Elastic checks for values never
+  // seen before, and how far back it looks to decide something counts as
+  // "new" (e.g. "now-7d"). Both required by Elastic whenever
+  // type: "new_terms" — omitting either is "new_terms_fields: Required,
+  // history_window_start: Required".
+  newTermsFields     String   @default("")
+  historyWindowStart String   @default("now-7d")
+  // ruleType "indicator_match" only (Elastic's wire type is "threat_match" —
+  // see mapRuleType in push-to-elastic.ts). threatIndex is the threat-intel
+  // index pattern(s) to match against (comma-separated); threatQuery narrows
+  // that index down (defaults to match-all); threatMapping is JSON
+  // [{ field, value }] pairs, ANDed together, mapping a field in this rule's
+  // own query results to the corresponding field in the threat-intel index.
+  // Elastic's fuller schema allows multiple OR'd groups of AND'd entries —
+  // this collapses to the single-group case, which covers the vast majority
+  // of real indicator-match rules. Without threatIndex/threatMapping, a
+  // "indicator_match" rule pushes as a bare query with no threat-matching
+  // logic at all instead of failing loudly, since mapRuleType previously had
+  // no case for it.
+  threatIndex        String   @default("")
+  threatQuery        String   @default("*:*")
+  threatMapping      String   @default("[]")
   source             String   @default("manual")
   authorId           String
   author             User     @relation(fields: [authorId], references: [id])
