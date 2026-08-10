@@ -551,19 +551,21 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
   return (
     <div className="space-y-6">
       {ruleId && (
-        <div className="flex flex-wrap gap-3">
-          <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="flex-1 gap-2">
-            {applied ? "Applied to Rule" : "Apply to Rule"}
-          </Button>
-          <Button
-            onClick={handlePostEnhanceAnalysis}
-            loading={analyzingPost}
-            disabled={!!postAnalysisResult}
-            variant="primary"
-            className="flex-1 gap-2"
-          >
-            {postAnalysisResult ? `Score: ${postAnalysisResult.score}/100` : "Analyze After Enhancement"}
-          </Button>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex flex-wrap gap-3 flex-1 min-w-[280px]">
+            <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="flex-1 gap-2">
+              {applied ? "Applied to Rule" : "Apply to Rule"}
+            </Button>
+            <Button
+              onClick={handlePostEnhanceAnalysis}
+              loading={analyzingPost}
+              disabled={!!postAnalysisResult}
+              variant="primary"
+              className="flex-1 gap-2"
+            >
+              {postAnalysisResult ? `Score: ${postAnalysisResult.score}/100` : "Analyze After Enhancement"}
+            </Button>
+          </div>
           <DeployToElasticControl ruleId={ruleId} disabledReason={applied ? undefined : "Apply the enhancement to the rule first"} />
         </div>
       )}
