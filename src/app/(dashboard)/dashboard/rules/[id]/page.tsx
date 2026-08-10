@@ -14,6 +14,7 @@ import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
 import { VersionHistory } from "@/components/version-history";
 import { CommentsSection } from "@/components/comments-section";
+import type { SyncFieldDiff } from "@/lib/errors";
 
 interface RuleDetail {
   id: string;
@@ -68,6 +69,24 @@ interface ElasticConn {
   isActive: boolean;
 }
 
+const SYNC_STATUS_LABEL: Record<string, string> = {
+  not_linked: "Not linked",
+  remote_missing: "Missing in Elastic",
+  in_sync: "In sync",
+  local_ahead: "Local changes not pushed",
+  remote_ahead: "Elastic changed — pull available",
+  diverged: "Diverged — review needed",
+};
+
+const SYNC_STATUS_BADGE: Record<string, "production" | "analyzed" | "enhanced" | "reject" | "draft" | "deprecated"> = {
+  not_linked: "draft",
+  remote_missing: "deprecated",
+  in_sync: "production",
+  local_ahead: "analyzed",
+  remote_ahead: "enhanced",
+  diverged: "reject",
+};
+
 export default function RuleDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -84,7 +103,11 @@ export default function RuleDetailPage() {
   const [selectedConn, setSelectedConn] = useState("");
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushing, setPushing] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [pausing, setPausing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<string | null>(null);
+  const [checkingSync, setCheckingSync] = useState(false);
+  const [conflict, setConflict] = useState<{ status: string; diffs: SyncFieldDiff[] } | null>(null);
   const [togglingCovered, setTogglingCovered] = useState(false);
 
   const canEdit = user && rule && (rule.authorId === user.id || user.role === "ADMIN");
@@ -197,6 +220,17 @@ export default function RuleDetailPage() {
     }
   };
 
+  const checkSync = async () => {
+    if (!rule?.elasticRuleId) return;
+    setCheckingSync(true);
+    try {
+      const res = await fetch(`/api/rules/${params.id}/elastic-check`);
+      const data = await res.json();
+      if (res.ok) setSyncStatus(data.status);
+    } catch { /* ignore */ }
+    finally { setCheckingSync(false); }
+  };
+
   const openElasticPush = async () => {
     try {
       const res = await fetch("/api/elastic");
@@ -207,17 +241,19 @@ export default function RuleDetailPage() {
         if (active.length > 0 && !selectedConn) setSelectedConn(active[0].id);
       }
     } catch { /* ignore */ }
+    setConflict(null);
     setElasticOpen(true);
+    checkSync();
   };
 
-  const handlePushElastic = async () => {
+  const handlePushElastic = async (force = false) => {
     if (!selectedConn) return;
     setPushing(true);
     try {
       const res = await fetch(`/api/rules/${params.id}/push-elastic`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ connectionId: selectedConn, enabled: pushEnabled }),
+        body: JSON.stringify({ connectionId: selectedConn, enabled: pushEnabled, force }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -228,7 +264,11 @@ export default function RuleDetailPage() {
             : `Rule ${data.action} in Elastic Security`
         );
         setElasticOpen(false);
+        setConflict(null);
+        setSyncStatus("in_sync");
         setRule((prev) => prev ? { ...prev, elasticRuleId: data.elasticRuleId, elasticEnabled: data.enabled } : prev);
+      } else if (data.conflict) {
+        setConflict({ status: data.status, diffs: data.diffs || [] });
       } else {
         addToast("error", data.error || "Failed to push rule");
       }
@@ -236,6 +276,32 @@ export default function RuleDetailPage() {
       addToast("error", "Failed to push rule to Elastic");
     } finally {
       setPushing(false);
+    }
+  };
+
+  const handlePullElastic = async (force = false) => {
+    setPulling(true);
+    try {
+      const res = await fetch(`/api/rules/${params.id}/pull-elastic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", "Pulled the current Elastic version into this rule");
+        setConflict(null);
+        setSyncStatus("in_sync");
+        setRule((prev) => prev ? { ...prev, title: data.title, description: data.description, query: data.query, severity: data.severity, riskScore: data.riskScore } : prev);
+      } else if (data.conflict) {
+        setConflict({ status: data.status, diffs: data.diffs || [] });
+      } else {
+        addToast("error", data.error || "Failed to pull rule from Elastic");
+      }
+    } catch {
+      addToast("error", "Failed to pull rule from Elastic");
+    } finally {
+      setPulling(false);
     }
   };
 
@@ -708,6 +774,66 @@ export default function RuleDetailPage() {
                       </p>
                     </div>
                   )}
+
+                  {rule.elasticRuleId && (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-text-muted">Sync status:</span>
+                        {checkingSync ? (
+                          <span className="text-xs text-text-muted">Checking...</span>
+                        ) : (
+                          <Badge preset={SYNC_STATUS_BADGE[syncStatus || ""] || "info"}>
+                            {SYNC_STATUS_LABEL[syncStatus || ""] || "Unknown"}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={checkSync} className="text-xs text-primary hover:underline">Recheck</button>
+                        {(syncStatus === "remote_ahead" || syncStatus === "diverged") && (
+                          <Button size="sm" variant="outline" onClick={() => handlePullElastic(false)} loading={pulling}>
+                            Pull
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {conflict && (
+                    <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 space-y-3">
+                      <p className="text-xs text-danger font-medium">
+                        {conflict.status === "diverged"
+                          ? "This rule and its Elastic copy have both changed since the last sync."
+                          : "Elastic has a version of this rule that hasn't been pulled in yet."}
+                      </p>
+                      {conflict.diffs.length > 0 && (
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {conflict.diffs.map((d) => (
+                            <div key={d.field} className="text-xs">
+                              <p className="font-semibold text-text mb-1">{d.label}</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-bg rounded px-2 py-1 border border-border">
+                                  <p className="text-[10px] text-text-muted mb-0.5">Odosian</p>
+                                  <p className="text-text-secondary truncate">{d.local || "—"}</p>
+                                </div>
+                                <div className="bg-bg rounded px-2 py-1 border border-border">
+                                  <p className="text-[10px] text-text-muted mb-0.5">Elastic</p>
+                                  <p className="text-text-secondary truncate">{d.remote || "—"}</p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => handlePullElastic(true)} loading={pulling}>
+                          Take Elastic&apos;s Version
+                        </Button>
+                        <Button size="sm" variant="danger" onClick={() => handlePushElastic(true)} loading={pushing}>
+                          Overwrite Elastic
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>
@@ -715,7 +841,7 @@ export default function RuleDetailPage() {
             {elasticConns.length > 0 && (
               <div className="px-6 py-4 border-t border-border flex items-center justify-end gap-2">
                 <Button variant="ghost" size="sm" onClick={() => setElasticOpen(false)}>Cancel</Button>
-                <Button size="sm" onClick={handlePushElastic} loading={pushing}>
+                <Button size="sm" onClick={() => handlePushElastic(false)} loading={pushing}>
                   {rule.elasticRuleId ? "Update Rule" : "Push Rule"}
                 </Button>
               </div>

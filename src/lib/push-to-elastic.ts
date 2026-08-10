@@ -1,9 +1,10 @@
 import { prisma } from "./prisma";
-import { HttpError } from "./errors";
+import { HttpError, SyncConflictError } from "./errors";
 import { logAudit } from "./audit";
 import { elasticFetch, type ElasticFetchResponse } from "./elastic-fetch";
 import { deriveRequiredFields } from "./required-fields";
 import { setElasticRuleEnabled } from "./elastic-rule-status";
+import { checkElasticSync, snapshotOf } from "./elastic-sync-check";
 
 interface ElasticThreat {
   framework: string;
@@ -149,7 +150,8 @@ export async function pushRuleToElastic(
   connectionId: string,
   enabled: boolean,
   userId: string,
-  ipAddress?: string
+  ipAddress?: string,
+  force = false
 ): Promise<PushToElasticResult> {
   const rule = await prisma.rule.findUnique({
     where: { id: ruleId },
@@ -283,6 +285,25 @@ export async function pushRuleToElastic(
   const method = rule.elasticRuleId && isOwnRule ? "PUT" : "POST";
   payload.rule_id = method === "PUT" ? rule.elasticRuleId! : `odosian-${rule.id}`;
 
+  // Only meaningful for an in-place update of a rule Odosian already owns —
+  // a fresh create or a duplicate-from-someone-else's-rule has no prior
+  // synced state to conflict with. Same idea as `git push` refusing a
+  // non-fast-forward: if Elastic's live copy has moved since our last known
+  // sync AND so has this rule, overwriting would silently discard whichever
+  // side didn't win.
+  if (method === "PUT" && !force) {
+    const check = await checkElasticSync(ruleId);
+    if (check.status === "diverged" || check.status === "remote_ahead") {
+      throw new SyncConflictError(
+        check.status === "diverged"
+          ? `"${rule.title}" has changed in both Odosian and Elastic since the last sync — pushing would overwrite Elastic's changes.`
+          : `"${rule.title}" was changed directly in Elastic since the last sync — pushing would overwrite that change.`,
+        check.status,
+        check.diffs
+      );
+    }
+  }
+
   let res: ElasticFetchResponse;
   try {
     res = await elasticFetch(
@@ -348,6 +369,10 @@ export async function pushRuleToElastic(
       elasticRuleId,
       elasticEnabled: enabled,
       elasticConnectionId: connectionId,
+      // What Odosian just pushed is now, by definition, also what Elastic
+      // has — this becomes the new merge base for the next Check/push/pull.
+      elasticSyncedSnapshot: JSON.stringify(snapshotOf(rule)),
+      elasticSyncedAt: new Date(),
       ...(autoCover ? { covered: true, coveredAt: new Date() } : {}),
     },
   });

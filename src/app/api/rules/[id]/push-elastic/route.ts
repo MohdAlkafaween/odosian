@@ -8,9 +8,9 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
   try {
     const { id } = await context.params as { id: string };
     const body = await request.json();
-    const { connectionId, enabled = false } = body;
+    const { connectionId, enabled = false, force = false } = body;
 
-    const result = await pushRuleToElastic(id, connectionId, enabled, request.user.id, getClientIp(request));
+    const result = await pushRuleToElastic(id, connectionId, enabled, request.user.id, getClientIp(request), force);
     return NextResponse.json(result);
   } catch (e) {
     console.error("Push to Elastic failed:", e);

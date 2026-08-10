@@ -16,8 +16,33 @@ export class HttpError extends Error {
 }
 
 export function httpErrorResponse(e: unknown, fallbackMessage: string): NextResponse {
-  if (e instanceof HttpError) return errorResponse(e.message, e.status);
+  if (e instanceof HttpError) {
+    if (e instanceof SyncConflictError) {
+      return NextResponse.json({ error: e.message, conflict: true, status: e.syncStatus, diffs: e.diffs }, { status: e.status });
+    }
+    return errorResponse(e.message, e.status);
+  }
   return errorResponse(e instanceof Error ? e.message : fallbackMessage, 500);
+}
+
+export interface SyncFieldDiff {
+  field: string;
+  label: string;
+  local: string;
+  remote: string;
+}
+
+// Thrown by pushRuleToElastic/pullSingleRuleFromElastic when the rule and
+// its live Elastic counterpart have both changed since the last sync (or
+// the side about to be overwritten has unsynced changes) and the caller
+// didn't pass force:true — the git-push-rejected-as-non-fast-forward
+// equivalent. Carries enough for the UI to show a diff instead of a bare
+// error string.
+export class SyncConflictError extends HttpError {
+  constructor(message: string, public readonly syncStatus: string, public readonly diffs: SyncFieldDiff[]) {
+    super(message, 409);
+    this.name = "SyncConflictError";
+  }
 }
 
 export function aiErrorResponse(e: unknown, fallbackMessage: string): NextResponse {

@@ -64,6 +64,15 @@ model Rule {
   // reach the right Kibana without asking the user to pick a connection again.
   elasticConnectionId String?
   elasticConnection    ElasticConnection? @relation(fields: [elasticConnectionId], references: [id], onDelete: SetNull)
+  // The "merge base" for git-style sync checking: a snapshot of
+  // title/description/query/severity/riskScore exactly as they stood at the
+  // moment of the last successful push or pull. Without this there are only
+  // two states to compare (Odosian's copy vs. Elastic's live copy) and no
+  // way to tell whose changes would be lost by overwriting — with it, both
+  // sides can be compared against "what we both last agreed on", the same
+  // way git uses a merge base to tell ahead/behind/diverged apart.
+  elasticSyncedSnapshot String  @default("")
+  elasticSyncedAt       DateTime?
   interval           String   @default("5m")
   fromTime           String   @default("now-6m")
   maxSignals         Int      @default(100)
