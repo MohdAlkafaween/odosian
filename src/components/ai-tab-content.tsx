@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useTabStore, type AITab, type TabType, type SimulateResult } from "@/stores/tabs";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -66,16 +67,32 @@ export function AITabContent() {
             </div>
             <h1 className="text-xl font-bold text-text">{activeTab.title}</h1>
             {activeTab.ruleName && (
-              <p className="text-sm text-text-muted mt-0.5">Rule: {activeTab.ruleName}</p>
+              <p className="text-sm text-text-muted mt-0.5">
+                Rule:{" "}
+                {activeTab.ruleId ? (
+                  <Link href={`/dashboard/rules/${activeTab.ruleId}`} className="text-primary hover:underline">
+                    {activeTab.ruleName}
+                  </Link>
+                ) : (
+                  activeTab.ruleName
+                )}
+              </p>
             )}
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setActiveTab(null)}
-          >
-            Close Tab View
-          </Button>
+          <div className="flex items-center gap-2">
+            {activeTab.ruleId && (
+              <Link href={`/dashboard/rules/${activeTab.ruleId}`}>
+                <Button size="sm" variant="outline">View Rule</Button>
+              </Link>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setActiveTab(null)}
+            >
+              Close Tab View
+            </Button>
+          </div>
         </div>
 
         {isBatchType(activeTab.type) && activeTab.batchId && (
@@ -120,6 +137,154 @@ export function AITabContent() {
         )}
       </div>
     </div>
+  );
+}
+
+interface ElasticConn {
+  id: string;
+  name: string;
+  kibanaUrl: string;
+  isActive: boolean;
+}
+
+interface SyncDiff {
+  field: string;
+  label: string;
+  local: string;
+  remote: string;
+}
+
+// Neither the Analyze nor the Enhance tab view had any way to push the
+// result's rule to Elastic — deploying only existed from the rule detail
+// page and the batch review page. Shared here (used by both
+// TabAnalyzeResults and TabEnhanceResults) instead of duplicated twice.
+// disabledReason, when set, shows in place of the connection picker instead
+// of letting Deploy be clicked — used by the Enhance tab to require Apply
+// first, since deploying always pushes whatever's *currently* on the rule.
+function DeployToElasticControl({ ruleId, disabledReason }: { ruleId?: string; disabledReason?: string }) {
+  const { addToast } = useToastStore();
+  const [open, setOpen] = useState(false);
+  const [conns, setConns] = useState<ElasticConn[]>([]);
+  const [selectedConn, setSelectedConn] = useState("");
+  const [enabled, setEnabled] = useState(false);
+  const [deploying, setDeploying] = useState(false);
+  const [deployed, setDeployed] = useState(false);
+  const [conflict, setConflict] = useState<{ status: string; diffs: SyncDiff[] } | null>(null);
+
+  const openPanel = async () => {
+    if (!ruleId || disabledReason) return;
+    setConflict(null);
+    setOpen(true);
+    try {
+      const res = await fetch("/api/elastic");
+      const data = await res.json();
+      const active: ElasticConn[] = (data.connections || []).filter((c: ElasticConn) => c.isActive);
+      setConns(active);
+      setSelectedConn((prev) => prev || active[0]?.id || "");
+    } catch { /* ignore */ }
+  };
+
+  const deploy = async (force = false) => {
+    if (!ruleId || !selectedConn) return;
+    setDeploying(true);
+    try {
+      const res = await fetch(`/api/rules/${ruleId}/push-elastic`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ connectionId: selectedConn, enabled, force }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", `Rule ${data.action} in Elastic Security`);
+        setDeployed(true);
+        setOpen(false);
+        setConflict(null);
+      } else if (data.conflict) {
+        setConflict({ status: data.status, diffs: data.diffs || [] });
+      } else {
+        addToast("error", data.error || "Failed to deploy");
+      }
+    } catch {
+      addToast("error", "Failed to deploy");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  if (!ruleId) return null;
+
+  if (!open) {
+    return (
+      <Button
+        onClick={openPanel}
+        variant="success"
+        disabled={deployed || !!disabledReason}
+        className="gap-2"
+        title={disabledReason}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>
+        {deployed ? "Deployed" : "Deploy to Elastic"}
+      </Button>
+    );
+  }
+
+  return (
+    <Card className="w-full max-w-md">
+      <CardBody className="space-y-3">
+        {conns.length === 0 ? (
+          <p className="text-sm text-text-muted">No active Elastic connections — add one in Settings &gt; API &amp; Connections.</p>
+        ) : (
+          <>
+            <select
+              value={selectedConn}
+              onChange={(e) => setSelectedConn(e.target.value)}
+              className="w-full bg-bg border border-border rounded-lg px-3 py-2 text-sm text-text focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              {conns.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} — {c.kibanaUrl}</option>
+              ))}
+            </select>
+            <label className="flex items-center gap-2 text-xs text-text-secondary">
+              <input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} />
+              Enable rule after push
+            </label>
+
+            {conflict && (
+              <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 space-y-2">
+                <p className="text-xs text-danger font-medium">
+                  {conflict.status === "diverged"
+                    ? "This rule has changed in both Odosian and Elastic since the last sync."
+                    : "Elastic has a version of this rule that hasn't been pulled in yet."}
+                </p>
+                {conflict.diffs.map((d) => (
+                  <div key={d.field} className="text-xs">
+                    <p className="font-semibold text-text mb-1">{d.label}</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-bg rounded px-2 py-1 border border-border">
+                        <p className="text-[10px] text-text-muted mb-0.5">Odosian</p>
+                        <p className="text-text-secondary truncate">{d.local || "—"}</p>
+                      </div>
+                      <div className="bg-bg rounded px-2 py-1 border border-border">
+                        <p className="text-[10px] text-text-muted mb-0.5">Elastic</p>
+                        <p className="text-text-secondary truncate">{d.remote || "—"}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <Button size="sm" variant="danger" onClick={() => deploy(true)} loading={deploying}>
+                  Overwrite Elastic
+                </Button>
+              </div>
+            )}
+
+            <div className="flex gap-2 justify-end">
+              <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={() => deploy(false)} loading={deploying}>Deploy</Button>
+            </div>
+          </>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 
@@ -172,10 +337,13 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
           </div>
         </div>
         {ruleId && (
-          <Button onClick={handleEnhance} loading={enhancing} variant="primary" className="gap-2">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
-            Enhance This Rule
-          </Button>
+          <div className="flex items-start gap-2">
+            <Button onClick={handleEnhance} loading={enhancing} variant="primary" className="gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" /></svg>
+              Enhance This Rule
+            </Button>
+            <DeployToElasticControl ruleId={ruleId} />
+          </div>
         )}
       </div>
 
@@ -348,7 +516,7 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
   return (
     <div className="space-y-6">
       {ruleId && (
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button onClick={handleApply} loading={applying} disabled={applied} variant="success" className="flex-1 gap-2">
             {applied ? "Applied to Rule" : "Apply to Rule"}
           </Button>
@@ -361,6 +529,7 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
           >
             {postAnalysisResult ? `Score: ${postAnalysisResult.score}/100` : "Analyze After Enhancement"}
           </Button>
+          <DeployToElasticControl ruleId={ruleId} disabledReason={applied ? undefined : "Apply the enhancement to the rule first"} />
         </div>
       )}
 
