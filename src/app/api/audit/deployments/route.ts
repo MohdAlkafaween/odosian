@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { authenticate, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 
-const DEPLOYMENT_ACTIONS = ["RULE_PUSHED_TO_ELASTIC", "RULE_UPDATED_IN_ELASTIC", "RULE_PULLED_FROM_ELASTIC"];
+const DEPLOYMENT_ACTIONS = ["RULE_PUSHED_TO_ELASTIC", "RULE_UPDATED_IN_ELASTIC", "RULE_PULLED_FROM_ELASTIC", "RULE_DELETED_FROM_ELASTIC"];
 
 // Pushes/pulls to Elastic are rule mutations, not Analysis rows, so they
 // never showed up anywhere in the History page before — they only ever

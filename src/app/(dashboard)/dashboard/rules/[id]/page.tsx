@@ -97,6 +97,8 @@ export default function RuleDetailPage() {
   const [loading, setLoading] = useState(true);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [removeElasticOpen, setRemoveElasticOpen] = useState(false);
+  const [removingElastic, setRemovingElastic] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [elasticOpen, setElasticOpen] = useState(false);
   const [elasticConns, setElasticConns] = useState<ElasticConn[]>([]);
@@ -172,6 +174,26 @@ export default function RuleDetailPage() {
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
+    }
+  };
+
+  const handleRemoveFromElastic = async () => {
+    setRemovingElastic(true);
+    try {
+      const res = await fetch(`/api/rules/${params.id}/delete-elastic`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", "Rule removed from Elastic");
+        setSyncStatus(null);
+        setRule((prev) => prev ? { ...prev, elasticRuleId: null, elasticEnabled: false, covered: false } : prev);
+      } else {
+        addToast("error", data.error || "Failed to remove rule from Elastic");
+      }
+    } catch {
+      addToast("error", "Failed to remove rule from Elastic");
+    } finally {
+      setRemovingElastic(false);
+      setRemoveElasticOpen(false);
     }
   };
 
@@ -401,6 +423,14 @@ export default function RuleDetailPage() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>
                 )}
                 {rule.elasticEnabled ? "Pause in Elastic" : "Resume in Elastic"}
+              </span>
+            </Button>
+          )}
+          {rule.elasticRuleId && (
+            <Button variant="danger" size="sm" onClick={() => setRemoveElasticOpen(true)}>
+              <span className="flex items-center gap-1.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" /></svg>
+                Remove from Elastic
               </span>
             </Button>
           )}
@@ -859,6 +889,17 @@ export default function RuleDetailPage() {
         confirmLabel="Delete"
         variant="danger"
         loading={deleting}
+      />
+
+      <ConfirmDialog
+        open={removeElasticOpen}
+        onClose={() => setRemoveElasticOpen(false)}
+        onConfirm={handleRemoveFromElastic}
+        title="Remove from Elastic"
+        message={`This deletes "${rule.title}" from Elastic Security entirely — it will stop generating alerts and won't show up in Kibana anymore. The rule stays in Odosian and can be pushed again later. Continue?`}
+        confirmLabel="Remove"
+        variant="danger"
+        loading={removingElastic}
       />
     </div>
   );

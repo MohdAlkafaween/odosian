@@ -169,6 +169,8 @@ function DeployToElasticControl({ ruleId, disabledReason }: { ruleId?: string; d
   const [enabled, setEnabled] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [deployed, setDeployed] = useState(false);
+  const [liveEnabled, setLiveEnabled] = useState(false);
+  const [disabling, setDisabling] = useState(false);
   const [conflict, setConflict] = useState<{ status: string; diffs: SyncDiff[] } | null>(null);
 
   const openPanel = async () => {
@@ -197,6 +199,7 @@ function DeployToElasticControl({ ruleId, disabledReason }: { ruleId?: string; d
       if (res.ok) {
         addToast("success", `Rule ${data.action} in Elastic Security`);
         setDeployed(true);
+        setLiveEnabled(enabled);
         setOpen(false);
         setConflict(null);
       } else if (data.conflict) {
@@ -211,20 +214,52 @@ function DeployToElasticControl({ ruleId, disabledReason }: { ruleId?: string; d
     }
   };
 
+  // Undo for a mistaken deploy, right where you just clicked Deploy instead
+  // of needing to go find the rule and pause it from there.
+  const handleDisable = async () => {
+    if (!ruleId) return;
+    setDisabling(true);
+    try {
+      const res = await fetch(`/api/rules/${ruleId}/elastic-enabled`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: false }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("success", "Rule disabled in Elastic");
+        setLiveEnabled(false);
+      } else {
+        addToast("error", data.error || "Failed to disable rule");
+      }
+    } catch {
+      addToast("error", "Failed to disable rule");
+    } finally {
+      setDisabling(false);
+    }
+  };
+
   if (!ruleId) return null;
 
   if (!open) {
     return (
-      <Button
-        onClick={openPanel}
-        variant="success"
-        disabled={deployed || !!disabledReason}
-        className="gap-2"
-        title={disabledReason}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>
-        {deployed ? "Deployed" : "Deploy to Elastic"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          onClick={openPanel}
+          variant="success"
+          disabled={deployed || !!disabledReason}
+          className="gap-2"
+          title={disabledReason}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" /></svg>
+          {deployed ? "Deployed" : "Deploy to Elastic"}
+        </Button>
+        {deployed && liveEnabled && (
+          <Button size="sm" variant="danger" onClick={handleDisable} loading={disabling}>
+            Deployed by mistake? Disable
+          </Button>
+        )}
+      </div>
     );
   }
 

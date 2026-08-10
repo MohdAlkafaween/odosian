@@ -27,12 +27,14 @@ const ACTION_LABEL: Record<string, string> = {
   RULE_PUSHED_TO_ELASTIC: "Pushed (new)",
   RULE_UPDATED_IN_ELASTIC: "Pushed (update)",
   RULE_PULLED_FROM_ELASTIC: "Pulled from Elastic",
+  RULE_DELETED_FROM_ELASTIC: "Removed from Elastic",
 };
 
-const ACTION_BADGE: Record<string, "production" | "enhanced" | "analyzed"> = {
+const ACTION_BADGE: Record<string, "production" | "enhanced" | "analyzed" | "reject"> = {
   RULE_PUSHED_TO_ELASTIC: "production",
   RULE_UPDATED_IN_ELASTIC: "enhanced",
   RULE_PULLED_FROM_ELASTIC: "analyzed",
+  RULE_DELETED_FROM_ELASTIC: "reject",
 };
 
 // Pushes and pulls to/from Elastic — surfaced here because they were
