@@ -239,6 +239,9 @@ export function BatchProgress({ batchId, onStatusChange }: {
   const canBulkPostEnhance = batch.operation === "enhance"
     && (batch.status === "completed" || batch.status === "partial")
     && batch.items.some((i) => i.status === "completed");
+  const canReview = isEnhance
+    && (batch.status === "completed" || batch.status === "partial")
+    && batch.items.some((i) => i.status === "completed");
   const progressPct = batch.totalCount > 0
     ? Math.round(((batch.completedCount + batch.failedCount + batch.skippedCount) / batch.totalCount) * 100)
     : 0;
@@ -250,6 +253,11 @@ export function BatchProgress({ batchId, onStatusChange }: {
           {OPERATION_LABEL[batch.operation] || batch.operation} started by {batch.createdBy} on {new Date(batch.createdAt).toLocaleString()}
         </p>
         <div className="flex items-center gap-2">
+          {canReview && (
+            <Link href={`/dashboard/analysis/batches/${batch.id}/review`}>
+              <Button size="sm" variant="success">Review &amp; Deploy</Button>
+            </Link>
+          )}
           {canBulkEnhance && (
             <Button size="sm" onClick={handleBulkEnhance} loading={startingEnhance}>
               Enhance {batch.items.filter((i) => i.status === "completed").length} Analyzed Rules
