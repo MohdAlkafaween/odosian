@@ -30,6 +30,26 @@ interface RuleOption {
   mitreMappings?: { tacticName: string }[];
 }
 
+// The rule picker only ever loads the first 100 rules (?limit=100) — fine
+// for a dropdown, but a ruleId arriving via the URL (e.g. the "Analyze"
+// button on a rule's own page) is very likely NOT one of those 100 once
+// there are more rules than that. Falling back to a hardcoded "Rule"
+// literal for the tab title/banner is what showed up as literally "Rule"
+// instead of the real name — this fetches the one specific rule instead
+// of assuming its title is already sitting in the truncated list.
+async function resolveRuleTitle(rules: RuleOption[], ruleId: string): Promise<string> {
+  const found = rules.find((r) => r.id === ruleId)?.title;
+  if (found) return found;
+  try {
+    const res = await fetch(`/api/rules/${ruleId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.rule?.title) return data.rule.title as string;
+    }
+  } catch { /* falls through to the generic label below */ }
+  return "Rule";
+}
+
 function AnalysisContent() {
   const searchParams = useSearchParams();
   const { addToast } = useToastStore();
@@ -39,20 +59,39 @@ function AnalysisContent() {
   const [rules, setRules] = useState<RuleOption[]>([]);
 
   useEffect(() => {
+    const mapRule = (r: Record<string, unknown>): RuleOption => ({
+      id: r.id as string,
+      title: r.title as string,
+      severity: r.severity as string,
+      language: r.language as string,
+      status: r.status as string,
+      ruleType: r.ruleType as string,
+      tags: r.tags as string,
+      mitreMappings: r.mitreMappings as { tacticName: string }[] | undefined,
+    });
+
     fetch("/api/rules?limit=100")
       .then((r) => r.json())
-      .then((d) => setRules((d.rules || []).map((r: Record<string, unknown>) => ({
-        id: r.id as string,
-        title: r.title as string,
-        severity: r.severity as string,
-        language: r.language as string,
-        status: r.status as string,
-        ruleType: r.ruleType as string,
-        tags: r.tags as string,
-        mitreMappings: r.mitreMappings as { tacticName: string }[] | undefined,
-      }))))
+      .then(async (d) => {
+        const list: RuleOption[] = (d.rules || []).map(mapRule);
+        // A rule preselected via the URL (the "Analyze"/"Enhance" button on
+        // a rule's own page passes ?ruleId=) can easily not be one of the
+        // first 100 once there are more rules than that — the picker would
+        // otherwise show nothing selected and every tab opened for it would
+        // fall back to the literal word "Rule" instead of its real title.
+        if (preselectedRuleId && !list.some((r) => r.id === preselectedRuleId)) {
+          try {
+            const res = await fetch(`/api/rules/${preselectedRuleId}`);
+            if (res.ok) {
+              const rd = await res.json();
+              if (rd.rule) list.unshift(mapRule(rd.rule));
+            }
+          } catch { /* falls back to nothing preselected in the list */ }
+        }
+        setRules(list);
+      })
       .catch(() => {});
-  }, []);
+  }, [preselectedRuleId]);
 
   const tabs = [
     { id: "analyze", label: "Analyze Rule" },
@@ -313,7 +352,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
 
   const handleEnhanceDirect = useCallback(async () => {
     if (!ruleId) return;
-    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
+    const ruleName = await resolveRuleTitle(rules, ruleId);
     const tabId = addTab({ type: "enhance", title: `Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Enhancing rule..." });
     setEnhancing(true);
     setEnhanceResult(null);
@@ -343,7 +382,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
     if (mode === "rule" && !ruleId) { addToast("error", "Select a rule"); return; }
     if (mode === "query" && !rawQuery) { addToast("error", "Enter a query"); return; }
 
-    const ruleName = mode === "rule" ? rules.find((r) => r.id === ruleId)?.title || "Rule" : "Raw Query";
+    const ruleName = mode === "rule" ? await resolveRuleTitle(rules, ruleId) : "Raw Query";
     const tabId = addTab({ type: "analyze", title: `Analyze: ${ruleName}`, ruleId: mode === "rule" ? ruleId : undefined, ruleName, status: "running", statusMessage: "AI is analyzing..." });
 
     setLoading(true);
@@ -816,7 +855,7 @@ function EnhanceTab({ rules, addToast }: {
 
   const handleEnhance = async () => {
     if (!ruleId) { addToast("error", "Select a rule"); return; }
-    const ruleName = rules.find((r) => r.id === ruleId)?.title || "Rule";
+    const ruleName = await resolveRuleTitle(rules, ruleId);
     const tabId = addTab({ type: "enhance", title: `Enhance: ${ruleName}`, ruleId, ruleName, status: "running", statusMessage: "Enhancing rule..." });
     setLoading(true);
     setResult(null);
