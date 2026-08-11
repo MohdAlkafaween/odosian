@@ -12,11 +12,9 @@ const STATUS_RANK: Record<string, number> = { draft: 0, reviewed: 1, production:
 export async function maybeAdvanceRuleStatus(ruleId: string): Promise<void> {
   const rule = await prisma.rule.findUnique({
     where: { id: ruleId },
-    select: { status: true, elasticRuleId: true, elasticEnabled: true },
+    select: { status: true, elasticRuleId: true, elasticEnabled: true, covered: true },
   });
-  if (!rule || rule.status === "deprecated") return;
-
-  const currentRank = STATUS_RANK[rule.status] ?? 0;
+  if (!rule) return;
 
   const analysisTypes = await prisma.analysis.findMany({
     where: { ruleId },
@@ -31,6 +29,19 @@ export async function maybeAdvanceRuleStatus(ruleId: string): Promise<void> {
   const hasAnalyzed = types.has("analyze");
   const isProduction = hasAnalyzed && types.has("enhance") && !!rule.elasticRuleId && rule.elasticEnabled;
 
+  // "covered" is the exact same condition as isProduction, but it's a plain
+  // boolean (not ranked) and was previously only ever computed once, inside
+  // pushRuleToElastic's own success handler, from whatever analyses existed
+  // at that exact moment — a rule pulled in from Elastic already linked
+  // (the common case) and analyzed/enhanced/enabled afterward never got it
+  // set at all. Recomputing it here, at every event that could complete the
+  // condition, fixes that the same way the status bump below already does.
+  if (isProduction && !rule.covered) {
+    await prisma.rule.update({ where: { id: ruleId }, data: { covered: true, coveredAt: new Date() } });
+  }
+
+  if (rule.status === "deprecated") return;
+  const currentRank = STATUS_RANK[rule.status] ?? 0;
   const target = isProduction ? "production" : hasAnalyzed ? "reviewed" : null;
   if (target && STATUS_RANK[target] > currentRank) {
     await prisma.rule.update({ where: { id: ruleId }, data: { status: target } });
