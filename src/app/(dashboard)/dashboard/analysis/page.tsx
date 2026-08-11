@@ -129,7 +129,7 @@ function AnalysisContent() {
               />
             )}
             {activeTab === "enhance" && (
-              <EnhanceTab rules={rules} addToast={addToast} />
+              <EnhanceTab rules={rules} defaultRuleId={preselectedRuleId} addToast={addToast} />
             )}
             {activeTab === "generate" && (
               <GenerateTab addToast={addToast} />
@@ -843,11 +843,12 @@ function EnhanceResults({ result, ruleId, addToast }: {
   );
 }
 
-function EnhanceTab({ rules, addToast }: {
+function EnhanceTab({ rules, defaultRuleId, addToast }: {
   rules: RuleOption[];
+  defaultRuleId: string;
   addToast: ToastFn;
 }) {
-  const [ruleId, setRuleId] = useState("");
+  const [ruleId, setRuleId] = useState(defaultRuleId);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<EnhanceResult & { inputQuery?: string } | null>(null);
   const [statusMessage, setStatusMessage] = useState("");

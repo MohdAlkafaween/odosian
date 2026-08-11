@@ -474,7 +474,14 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
             size="sm"
             onClick={() => router.push(`/dashboard/analysis?tab=analyze&ruleId=${rule.id}`)}
           >
-            Analyze
+            {rule.aiFlags?.enhanced ? "Post Analysis" : "Analyze"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => router.push(`/dashboard/analysis?tab=enhance&ruleId=${rule.id}`)}
+          >
+            Enhance
           </Button>
           <Button variant="outline" size="sm" onClick={handleDuplicate} loading={duplicating}>
             Duplicate
