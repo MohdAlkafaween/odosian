@@ -20,7 +20,7 @@ function formatDetectionQuery(code: string): string {
 export function CodeBlock({
   code,
   language = "yaml",
-  maxHeight = "400px",
+  maxHeight,
   formatQuery = false,
 }: CodeBlockProps) {
   const displayCode = formatQuery ? formatDetectionQuery(code) : code;
@@ -43,9 +43,14 @@ export function CodeBlock({
           {copied ? "Copied!" : "Copy"}
         </button>
       </div>
+      {/* No maxHeight by default — the box grows to fit the query instead
+          of capping at a fixed height and forcing a scrollbar the user has
+          to interact with to see the rest. Callers that do pass maxHeight
+          (short illustrative snippets in Suggestions, etc.) keep that
+          fixed-height scrolling behavior unchanged. */}
       <pre
-        className="p-4 overflow-auto font-mono text-sm text-text"
-        style={{ maxHeight }}
+        className="p-4 overflow-x-auto font-mono text-sm text-text"
+        style={maxHeight ? { maxHeight, overflowY: "auto" } : undefined}
       >
         <code>{displayCode}</code>
       </pre>
