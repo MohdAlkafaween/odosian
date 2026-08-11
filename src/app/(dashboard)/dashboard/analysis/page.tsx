@@ -141,14 +141,18 @@ function AnalysisContent() {
   );
 }
 
-function RuleSelector({ rules, selectedId, onSelect }: {
-  rules: RuleOption[];
+function RuleSelector({ selectedId, onSelect }: {
   selectedId: string;
   onSelect: (id: string) => void;
 }) {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [expanded, setExpanded] = useState(!selectedId);
   const [filters, setFilters] = useState<{ severity?: string; status?: string; language?: string }>({});
+  const [results, setResults] = useState<RuleOption[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<RuleOption | null>(null);
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
   const toggleFilter = (key: "severity" | "status" | "language", value: string) => {
@@ -157,21 +161,48 @@ function RuleSelector({ rules, selectedId, onSelect }: {
 
   const clearFilters = () => setFilters({});
 
-  const filtered = rules.filter((r) => {
-    if (filters.severity && r.severity !== filters.severity) return false;
-    if (filters.status && r.status !== filters.status) return false;
-    if (filters.language && r.language !== filters.language) return false;
-    if (search) {
-      const s = search.toLowerCase();
-      return r.title.toLowerCase().includes(s) || r.id.toLowerCase().includes(s);
-    }
-    return true;
-  });
+  // Debounced so every keystroke doesn't fire its own request.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const selected = rules.find((r) => r.id === selectedId);
+  // Searches the server directly instead of filtering a fixed local
+  // snapshot — a snapshot capped at any size (this used to be the first
+  // 100 rules) makes every filter/search silently scoped to whatever
+  // happened to be in that snapshot rather than the whole rule set, which
+  // is exactly what "24 of 100" was showing instead of "24 of 1400+".
+  useEffect(() => {
+    if (!expanded) return;
+    setLoading(true);
+    const params = new URLSearchParams({ limit: "50", sortBy: "title", sortDir: "asc" });
+    if (debouncedSearch) params.set("search", debouncedSearch);
+    if (filters.severity) params.set("severity", filters.severity);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.language) params.set("language", filters.language);
+    fetch(`/api/rules?${params}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setResults(d.rules || []);
+        setTotal(d.pagination?.total ?? (d.rules || []).length);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [expanded, debouncedSearch, filters]);
 
-  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-  const sorted = [...filtered].sort((a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4));
+  // The selected rule (for the collapsed summary card) might not be one of
+  // the currently loaded search results — fetch it directly rather than
+  // relying on it happening to be in whatever's currently loaded.
+  useEffect(() => {
+    if (!selectedId) { setSelected(null); return; }
+    const found = results.find((r) => r.id === selectedId);
+    if (found) { setSelected(found); return; }
+    fetch(`/api/rules/${selectedId}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.rule) setSelected(d.rule); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId]);
 
   const chipClass = (active: boolean) =>
     `px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer transition-all border ${
@@ -186,6 +217,14 @@ function RuleSelector({ rules, selectedId, onSelect }: {
     medium: "bg-severity-medium",
     low: "bg-primary",
   };
+
+  // The server sorts alphabetically by title (its severity sort would be
+  // alphabetical too — "critical" < "high" < "low" < "medium" — not a real
+  // priority order) — re-sorting just the current page of results by actual
+  // severity priority for display is cheap and gives the same "worst rules
+  // surface first" grouping the picker always had.
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+  const sorted = [...results].sort((a, b) => (severityOrder[a.severity] ?? 4) - (severityOrder[b.severity] ?? 4));
 
   if (selected && !expanded) {
     return (
@@ -274,7 +313,7 @@ function RuleSelector({ rules, selectedId, onSelect }: {
       {/* Results count */}
       <div className="flex items-center justify-between">
         <p className="text-xs text-text-muted">
-          {filtered.length === rules.length ? `${rules.length} rules` : `${filtered.length} of ${rules.length} rules`}
+          {loading ? "Searching..." : results.length === total ? `${total} rule${total !== 1 ? "s" : ""}` : `Showing ${results.length} of ${total} matching rules`}
         </p>
         {selected && (
           <button onClick={() => setExpanded(false)} className="text-xs text-primary hover:text-primary-hover transition-colors">
@@ -285,7 +324,12 @@ function RuleSelector({ rules, selectedId, onSelect }: {
 
       {/* Rule list */}
       <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-        {sorted.length === 0 && (
+        {loading && (
+          <div className="flex justify-center py-8">
+            <Spinner size="sm" />
+          </div>
+        )}
+        {!loading && sorted.length === 0 && (
           <div className="text-center py-8">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="mx-auto text-text-muted mb-2">
               <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0016 9.5 6.5 6.5 0 109.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5z" />
@@ -296,7 +340,7 @@ function RuleSelector({ rules, selectedId, onSelect }: {
             )}
           </div>
         )}
-        {sorted.map((rule) => {
+        {!loading && sorted.map((rule) => {
           const isSelected = selectedId === rule.id;
           return (
             <button
@@ -419,7 +463,7 @@ function AnalyzeTab({ rules, defaultRuleId, addToast }: {
             <Button size="sm" variant={mode === "query" ? "primary" : "ghost"} onClick={() => setMode("query")}>Raw Query</Button>
           </div>
           {mode === "rule" ? (
-            <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
+            <RuleSelector selectedId={ruleId} onSelect={setRuleId} />
           ) : (
             <>
               <Textarea label="Detection Query" value={rawQuery} onChange={(e) => setRawQuery(e.target.value)} rows={6} className="font-mono text-sm" placeholder="Enter your detection query..." />
@@ -887,7 +931,7 @@ function EnhanceTab({ rules, defaultRuleId, addToast }: {
     <div className="space-y-6">
       <Card>
         <CardBody className="space-y-4">
-          <RuleSelector rules={rules} selectedId={ruleId} onSelect={setRuleId} />
+          <RuleSelector selectedId={ruleId} onSelect={setRuleId} />
           <p className="text-xs text-text-muted">If the rule hasn&apos;t been analyzed yet, analysis runs automatically before enhancement.</p>
           <Button onClick={handleEnhance} loading={loading} disabled={loading} className="w-full">
             {loading ? (statusMessage || "Enhancing...") : "Enhance Rule"}
