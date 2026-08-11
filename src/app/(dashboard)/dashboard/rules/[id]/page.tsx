@@ -69,6 +69,25 @@ interface ElasticConn {
   isActive: boolean;
 }
 
+// Matches RULE_TYPES/LANGUAGES in rule-form.tsx — this page was showing the
+// raw enum values (e.g. "new_terms", "kuery") instead of the same labels the
+// create/edit form already uses for them.
+const RULE_TYPE_LABEL: Record<string, string> = {
+  query: "Query",
+  eql: "EQL",
+  threshold: "Threshold",
+  new_terms: "New Terms",
+  machine_learning: "Machine Learning",
+  indicator_match: "Indicator Match",
+};
+
+const LANGUAGE_LABEL: Record<string, string> = {
+  kuery: "KQL (Kuery)",
+  eql: "EQL",
+  lucene: "Lucene",
+  esql: "ES|QL",
+};
+
 const SYNC_STATUS_LABEL: Record<string, string> = {
   not_linked: "Not linked",
   remote_missing: "Missing in Elastic",
@@ -504,11 +523,11 @@ export default function RuleDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div>
           <p className="text-xs text-text-muted">Type</p>
-          <p className="text-sm text-text">{rule.ruleType}</p>
+          <p className="text-sm text-text">{RULE_TYPE_LABEL[rule.ruleType] || rule.ruleType}</p>
         </div>
         <div>
           <p className="text-xs text-text-muted">Language</p>
-          <p className="text-sm text-text">{rule.language}</p>
+          <p className="text-sm text-text">{LANGUAGE_LABEL[rule.language] || rule.language}</p>
         </div>
         <div>
           <p className="text-xs text-text-muted">Interval</p>

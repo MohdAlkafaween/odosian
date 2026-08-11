@@ -69,6 +69,7 @@ const TYPE_OPTIONS = [
   { value: "threshold", label: "Threshold" },
   { value: "new_terms", label: "New Terms" },
   { value: "machine_learning", label: "ML" },
+  { value: "indicator_match", label: "Indicator Match" },
 ];
 
 const LANG_OPTIONS = [
@@ -78,6 +79,12 @@ const LANG_OPTIONS = [
   { value: "lucene", label: "Lucene" },
   { value: "esql", label: "ES|QL" },
 ];
+
+// The Type/Language table columns were showing the raw enum values
+// (e.g. "new_terms") instead of a label — reusing the filter dropdowns'
+// labels above instead of a third, separately-maintained list.
+const labelFor = (options: { value: string; label: string }[], value: string) =>
+  options.find((o) => o.value === value)?.label || value;
 
 const AI_FLAG_OPTIONS = [
   { value: "", label: "All AI Flags" },
@@ -486,8 +493,8 @@ export default function RulesListPage() {
       sortable: true,
       render: (row: RuleRow) => <Badge preset={row.status as "draft" | "reviewed" | "production" | "deprecated"} />,
     },
-    { key: "ruleType", header: "Type" },
-    { key: "language", header: "Language" },
+    { key: "ruleType", header: "Type", render: (row: RuleRow) => <span>{labelFor(TYPE_OPTIONS, row.ruleType)}</span> },
+    { key: "language", header: "Language", render: (row: RuleRow) => <span>{labelFor(LANG_OPTIONS, row.language)}</span> },
     {
       key: "author",
       header: "Author",
