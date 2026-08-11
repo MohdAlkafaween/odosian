@@ -52,7 +52,11 @@ export default function AnalysisHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [filterType, setFilterType] = useState("");
+  // Seeded from the dashboard's "ANALYSES" card link
+  // (/dashboard/analysis/history?analysisType=analyze) — the dashboard's
+  // "Analyses" figure means Analyze-type runs specifically, not every AI
+  // record type (enhance/generate/etc.) this page can also show.
+  const [filterType, setFilterType] = useState(() => searchParams.get("analysisType") || "");
   // Seeded from the dashboard's "Critical" stat card link
   // (/dashboard/analysis/history?critical=true) — not just a local toggle,
   // so landing here from that card shows exactly what it counted.

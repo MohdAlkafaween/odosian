@@ -132,7 +132,7 @@ export default function DashboardPage() {
             value: stats?.totalAnalyses ?? 0,
             color: "#A78BFA",
             sub: null,
-            href: "/dashboard/analysis/history",
+            href: "/dashboard/analysis/history?analysisType=analyze",
           },
           {
             label: "AVG SCORE",
