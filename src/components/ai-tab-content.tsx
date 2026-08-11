@@ -4,6 +4,7 @@ import { useTabStore, type AITab, type TabType, type SimulateResult, isPageTabTy
 import { RuleDetailView } from "@/components/rule-detail-view";
 import { MitreView } from "@/components/mitre-view";
 import { useOpenPageTab } from "@/hooks/use-open-page-tab";
+import { cancelTab } from "@/lib/tab-controllers";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -123,6 +124,19 @@ export function AITabContent() {
           <div className="flex flex-col items-center gap-3 py-16">
             <Spinner size="lg" />
             <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
+            {activeTab.type === "simulate" && (
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() => {
+                  if (cancelTab(activeTab.id)) {
+                    updateTab(activeTab.id, { status: "failed", error: "Simulation cancelled" });
+                  }
+                }}
+              >
+                Cancel
+              </Button>
+            )}
           </div>
         )}
 

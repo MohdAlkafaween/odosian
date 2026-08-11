@@ -16,6 +16,7 @@ import { VersionHistory } from "@/components/version-history";
 import { CommentsSection } from "@/components/comments-section";
 import type { SyncFieldDiff } from "@/lib/errors";
 import { useOpenPageTab } from "@/hooks/use-open-page-tab";
+import { registerTabController, clearTabController } from "@/lib/tab-controllers";
 
 interface RuleDetail {
   id: string;
@@ -112,6 +113,19 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
   const { openRule } = useOpenPageTab();
+  const { addTab, updateTab, setActiveTab } = useTabStore();
+
+  // When this view is rendered inside a tab (see ai-tab-content.tsx),
+  // activeTabId stays pointed at that tab even after router.push changes
+  // the URL — the dashboard layout shows AITabContent instead of the new
+  // route's page for as long as any tab is active, so a plain router.push
+  // from in here silently does nothing visible. Closing the tab first is
+  // what actually reveals the destination; it's a no-op when this is
+  // already rendered as a real page (activeTabId is null there already).
+  const navigate = (href: string) => {
+    setActiveTab(null);
+    router.push(href);
+  };
 
   const [rule, setRule] = useState<RuleDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -140,6 +154,7 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
         const res = await fetch(`/api/rules/${ruleId}`);
         if (!res.ok) {
           addToast("error", "Rule not found");
+          setActiveTab(null);
           router.push("/dashboard/rules");
           return;
         }
@@ -152,7 +167,7 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       }
     };
     fetchRule();
-  }, [ruleId, router, addToast]);
+  }, [ruleId, router, addToast, setActiveTab]);
 
   const handleToggleCovered = async () => {
     if (!rule) return;
@@ -184,7 +199,7 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       const res = await fetch(`/api/rules/${ruleId}`, { method: "DELETE" });
       if (res.ok) {
         addToast("success", "Rule deleted");
-        router.push("/dashboard/rules");
+        navigate("/dashboard/rules");
       } else {
         const data = await res.json();
         addToast("error", data.error || "Failed to delete rule");
@@ -235,8 +250,6 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
     }
   };
 
-  const { addTab, updateTab, setActiveTab } = useTabStore();
-
   const handleSimulate = async () => {
     if (!rule) return;
     const tabId = addTab({
@@ -248,8 +261,11 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       statusMessage: "Generating attack simulation from rule fields...",
     });
 
+    const controller = new AbortController();
+    registerTabController(tabId, controller);
+
     try {
-      const res = await fetch(`/api/rules/${rule.id}/simulate`, { method: "POST" });
+      const res = await fetch(`/api/rules/${rule.id}/simulate`, { method: "POST", signal: controller.signal });
       const data = await res.json();
       if (res.ok) {
         updateTab(tabId, { status: "completed", result: data.simulation });
@@ -257,8 +273,14 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       } else {
         updateTab(tabId, { status: "failed", error: data.error || "Simulation failed" });
       }
-    } catch {
-      updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        updateTab(tabId, { status: "failed", error: "Simulation cancelled" });
+      } else {
+        updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+      }
+    } finally {
+      clearTabController(tabId);
     }
   };
 
@@ -472,14 +494,14 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/analysis?tab=analyze&ruleId=${rule.id}`)}
+            onClick={() => navigate(`/dashboard/analysis?tab=analyze&ruleId=${rule.id}`)}
           >
             {rule.aiFlags?.enhanced ? "Post Analysis" : "Analyze"}
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/dashboard/analysis?tab=enhance&ruleId=${rule.id}`)}
+            onClick={() => navigate(`/dashboard/analysis?tab=enhance&ruleId=${rule.id}`)}
           >
             Enhance
           </Button>
@@ -488,7 +510,7 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
           </Button>
           {canEdit && (
             <>
-              <Button size="sm" onClick={() => router.push(`/dashboard/rules/${rule.id}/edit`)}>
+              <Button size="sm" onClick={() => navigate(`/dashboard/rules/${rule.id}/edit`)}>
                 Edit
               </Button>
               <Button variant="danger" size="sm" onClick={() => setDeleteOpen(true)}>
