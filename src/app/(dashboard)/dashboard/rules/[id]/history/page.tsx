@@ -10,6 +10,7 @@ import { PageLoader } from "@/components/ui/loading";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { DeploymentList } from "@/components/deployment-list";
 import { useOpenAnalysisTab } from "@/hooks/use-open-analysis-tab";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface AnalysisRecord {
   id: string;
@@ -53,6 +54,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function RuleAnalysisHistoryPage() {
   const params = useParams();
   const openAnalysisTab = useOpenAnalysisTab();
+  const { openRule } = useOpenPageTab();
   const [ruleTitle, setRuleTitle] = useState("");
   const [ruleLanguage, setRuleLanguage] = useState("kuery");
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
@@ -85,9 +87,12 @@ export default function RuleAnalysisHistoryPage() {
 
   return (
     <div className="max-w-5xl">
-      <Link href={`/dashboard/rules/${params.id}`} className="text-sm text-text-secondary hover:text-primary mb-4 inline-block">
+      <button
+        onClick={() => openRule(params.id as string, ruleTitle)}
+        className="text-sm text-text-secondary hover:text-primary mb-4 inline-block"
+      >
         ← Back to Rule
-      </Link>
+      </button>
 
       <div className="flex items-center justify-between mb-6">
         <div>

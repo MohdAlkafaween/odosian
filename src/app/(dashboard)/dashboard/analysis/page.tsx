@@ -3,7 +3,6 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Tabs } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -15,6 +14,7 @@ import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
 type ToastFn = (type: "success" | "error" | "info" | "warning", msg: string) => void;
@@ -32,7 +32,6 @@ interface RuleOption {
 
 function AnalysisContent() {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const { addToast } = useToastStore();
   const defaultTab = searchParams.get("tab") || "analyze";
   const preselectedRuleId = searchParams.get("ruleId") || "";
@@ -94,7 +93,7 @@ function AnalysisContent() {
               <EnhanceTab rules={rules} addToast={addToast} />
             )}
             {activeTab === "generate" && (
-              <GenerateTab addToast={addToast} router={router} />
+              <GenerateTab addToast={addToast} />
             )}
           </>
         )}
@@ -868,15 +867,15 @@ function EnhanceTab({ rules, addToast }: {
   );
 }
 
-function GenerateTab({ addToast, router }: {
+function GenerateTab({ addToast }: {
   addToast: ToastFn;
-  router: ReturnType<typeof useRouter>;
 }) {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<GenerateResult | null>(null);
   const { addTab, updateTab } = useTabStore();
+  const { openRule } = useOpenPageTab();
 
   const handleGenerate = async () => {
     if (description.length < 10) { addToast("error", "Description must be at least 10 characters"); return; }
@@ -916,7 +915,7 @@ function GenerateTab({ addToast, router }: {
       const data = await res.json();
       if (!res.ok) { addToast("error", data.error || "Failed to save"); return; }
       addToast("success", "Rule saved successfully");
-      if (data.savedRuleId) router.push(`/dashboard/rules/${data.savedRuleId}`);
+      if (data.savedRuleId) openRule(data.savedRuleId, data.savedRuleTitle || description);
     } catch { addToast("error", "Failed to save rule"); }
     finally { setSaving(false); }
   };

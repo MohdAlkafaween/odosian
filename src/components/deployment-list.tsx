@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/loading";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface DeploymentRow {
   id: string;
@@ -42,6 +42,7 @@ const ACTION_BADGE: Record<string, "production" | "enhanced" | "analyzed" | "rej
 // Embedded as the History page's "Deployments" tab.
 export function DeploymentList({ ruleId }: { ruleId?: string }) {
   const router = useRouter();
+  const { openRule } = useOpenPageTab();
   const [deployments, setDeployments] = useState<DeploymentRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -67,9 +68,9 @@ export function DeploymentList({ ruleId }: { ruleId?: string }) {
       key: "ruleTitle",
       header: "Rule",
       render: (row: DeploymentRow) => (
-        <Link href={`/dashboard/rules/${row.ruleId}`} className="text-primary hover:underline">
+        <button onClick={() => openRule(row.ruleId, row.ruleTitle)} className="text-primary hover:underline text-left">
           {row.ruleTitle}
-        </Link>
+        </button>
       ),
     },
     {

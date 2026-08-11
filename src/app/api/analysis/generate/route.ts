@@ -34,6 +34,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       });
 
       let savedRuleId: string | undefined;
+      let savedRuleTitle: string | undefined;
 
       if (saveAsRule) {
         const rule = await prisma.rule.create({
@@ -59,6 +60,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
           },
         });
         savedRuleId = rule.id;
+        savedRuleTitle = rule.title;
 
         if (result.mitreMappings?.length > 0) {
           await prisma.mitreMapping.createMany({
@@ -88,6 +90,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       return NextResponse.json({
         analysis: { ...analysis, ...result },
         savedRuleId,
+        savedRuleTitle,
       }, { status: 201 });
     } catch (e) {
       console.error("Generation failed:", e);

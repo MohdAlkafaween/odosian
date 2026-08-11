@@ -7,12 +7,14 @@ import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 export default function EditRulePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
 
   const [rule, setRule] = useState<(RuleFormData & { id: string; version: number; authorId: string; customFields?: Array<{ fieldName: string; fieldValue: string; fieldType: string }> }) | null>(null);
   const [loading, setLoading] = useState(true);
@@ -43,10 +45,10 @@ export default function EditRulePage() {
     if (!loading && rule && user) {
       if (rule.authorId !== user.id && user.role !== "ADMIN") {
         addToast("error", "You can only edit your own rules");
-        router.push(`/dashboard/rules/${params.id}`);
+        openRule(params.id, rule.title);
       }
     }
-  }, [loading, rule, user, router, params.id, addToast]);
+  }, [loading, rule, user, router, params.id, addToast, openRule]);
 
   const handleSubmit = async (data: RuleFormData) => {
     setSaving(true);
@@ -64,7 +66,7 @@ export default function EditRulePage() {
       }
 
       addToast("success", "Rule updated successfully");
-      router.push(`/dashboard/rules/${params.id}`);
+      openRule(params.id, result.rule.title);
     } catch {
       addToast("error", "Something went wrong");
     } finally {
@@ -89,7 +91,7 @@ export default function EditRulePage() {
         onSubmit={handleSubmit}
         submitLabel="Update Rule"
         loading={saving}
-        onCancel={() => router.push(`/dashboard/rules/${params.id}`)}
+        onCancel={() => openRule(params.id, rule.title)}
       />
     </div>
   );

@@ -2,8 +2,17 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
-export type TabType = "analyze" | "enhance" | "generate" | "simulate" | "batch_analyze" | "batch_enhance";
+export type TabType =
+  | "analyze" | "enhance" | "generate" | "simulate" | "batch_analyze" | "batch_enhance"
+  // "Page" tabs — unlike the AI-result types above, these don't carry a
+  // fetched-once `result`; they wrap a live, self-fetching view component
+  // (the same one the real route renders) so opening one is just "show this
+  // page here instead of navigating away." status is always "completed" the
+  // instant one of these is created — there's no running/failed phase.
+  | "rule_detail" | "mitre";
 export type TabStatus = "running" | "completed" | "failed";
+
+export const isPageTabType = (type: TabType) => type === "rule_detail" || type === "mitre";
 
 export interface SimulateResult {
   scenario: string;

@@ -1,7 +1,9 @@
 "use client";
 
-import Link from "next/link";
-import { useTabStore, type AITab, type TabType, type SimulateResult } from "@/stores/tabs";
+import { useTabStore, type AITab, type TabType, type SimulateResult, isPageTabType } from "@/stores/tabs";
+import { RuleDetailView } from "@/components/rule-detail-view";
+import { MitreView } from "@/components/mitre-view";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -35,6 +37,7 @@ const isBatchType = (type: TabType) => type === "batch_analyze" || type === "bat
 
 export function AITabContent() {
   const { tabs, activeTabId, setActiveTab, removeTab, updateTab } = useTabStore();
+  const { openRule } = useOpenPageTab();
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
   // A batch's real status lives in the DB, not on the tab — this syncs the
@@ -51,6 +54,22 @@ export function AITabContent() {
   }, [activeTab, updateTab]);
 
   if (!activeTab) return null;
+
+  // Page tabs (rule_detail, mitre) wrap a live, self-fetching view — the
+  // same component the real route renders — not a fetched-once AI result,
+  // so none of the running/completed/failed or Rule-banner machinery below
+  // applies. The view brings its own header/actions; the tab bar's own
+  // close (×) button is what closes it.
+  if (isPageTabType(activeTab.type)) {
+    return (
+      <div className="flex-1 overflow-auto bg-bg">
+        <div className="p-6 max-w-[1400px] mx-auto animate-fade-in">
+          {activeTab.type === "rule_detail" && activeTab.ruleId && <RuleDetailView ruleId={activeTab.ruleId} />}
+          {activeTab.type === "mitre" && <MitreView />}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-auto bg-bg">
@@ -69,9 +88,7 @@ export function AITabContent() {
           </div>
           <div className="flex items-center gap-2">
             {activeTab.ruleId && (
-              <Link href={`/dashboard/rules/${activeTab.ruleId}`}>
-                <Button size="sm" variant="outline">View Rule</Button>
-              </Link>
+              <Button size="sm" variant="outline" onClick={() => openRule(activeTab.ruleId!, activeTab.ruleName || "Rule")}>View Rule</Button>
             )}
             <Button
               size="sm"
@@ -84,9 +101,9 @@ export function AITabContent() {
         </div>
 
         {activeTab.ruleName && activeTab.ruleId && (
-          <Link
-            href={`/dashboard/rules/${activeTab.ruleId}`}
-            className="group flex items-center justify-between gap-3 mb-6 px-4 py-3 rounded-xl border border-border bg-surface/80 hover:border-primary/50 hover:bg-surface transition-colors"
+          <button
+            onClick={() => openRule(activeTab.ruleId!, activeTab.ruleName!)}
+            className="group w-full flex items-center justify-between gap-3 mb-6 px-4 py-3 rounded-xl border border-border bg-surface/80 hover:border-primary/50 hover:bg-surface transition-colors text-left"
           >
             <div className="min-w-0">
               <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Rule</p>
@@ -95,7 +112,7 @@ export function AITabContent() {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted group-hover:text-primary transition-colors shrink-0">
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
-          </Link>
+          </button>
         )}
 
         {isBatchType(activeTab.type) && activeTab.batchId && (
@@ -754,6 +771,7 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
 function TabGenerateResults({ result }: { result: GenerateResult }) {
   const [saving, setSaving] = useState(false);
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
 
   const handleSaveAsRule = async () => {
     setSaving(true);
@@ -766,7 +784,7 @@ function TabGenerateResults({ result }: { result: GenerateResult }) {
       const data = await res.json();
       if (!res.ok) { addToast("error", data.error || "Failed to save"); return; }
       addToast("success", "Rule saved successfully");
-      if (data.savedRuleId) window.location.href = `/dashboard/rules/${data.savedRuleId}`;
+      if (data.savedRuleId) openRule(data.savedRuleId, data.savedRuleTitle || result.title);
     } catch { addToast("error", "Failed to save rule"); }
     finally { setSaving(false); }
   };

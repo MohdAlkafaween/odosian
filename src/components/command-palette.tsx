@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface PaletteItem {
   label: string;
@@ -35,6 +36,7 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onClose }: CommandPaletteProps) {
   const router = useRouter();
   const { user } = useAuthStore();
+  const { openMitre } = useOpenPageTab();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
@@ -56,10 +58,14 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
 
   const navigate = useCallback(
     (href: string) => {
-      router.push(href);
+      if (href === "/dashboard/mitre") {
+        openMitre();
+      } else {
+        router.push(href);
+      }
       onClose();
     },
-    [router, onClose]
+    [router, onClose, openMitre]
   );
 
   useEffect(() => {

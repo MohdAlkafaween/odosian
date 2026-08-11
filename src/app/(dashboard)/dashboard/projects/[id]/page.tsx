@@ -10,6 +10,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface ProjectRule {
   id: string;
@@ -36,6 +37,7 @@ export default function ProjectDetailPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
 
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -255,9 +257,9 @@ export default function ProjectDetailPage() {
                   <div className="flex items-center gap-3">
                     <Badge preset={rule.severity as "low" | "medium" | "high" | "critical"} />
                     <div>
-                      <Link href={`/dashboard/rules/${rule.id}`} className="text-sm font-medium text-primary hover:underline">
+                      <button onClick={() => openRule(rule.id, rule.title)} className="text-sm font-medium text-primary hover:underline">
                         {rule.title}
-                      </Link>
+                      </button>
                       <p className="text-xs text-text-muted">
                         {rule.ruleType} · {rule.language} · <Badge preset={rule.status as "draft" | "reviewed" | "production" | "deprecated"} />
                       </p>

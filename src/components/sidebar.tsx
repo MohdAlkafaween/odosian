@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth";
 import { useToastStore } from "@/stores/toast";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface NavItem {
   label: string;
@@ -145,6 +146,7 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
   const router = useRouter();
   const { user, clearAuth } = useAuthStore();
   const { addToast } = useToastStore();
+  const { openMitre } = useOpenPageTab();
   const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = async () => {
@@ -190,21 +192,31 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
             </button>
           </div>
           <nav className="flex-1 py-3 px-2 overflow-y-auto flex flex-col gap-0.5">
-            {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={handleNavClick}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
-                  isActive(item.href)
-                    ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
-                    : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
-                }`}
-              >
-                <span className="shrink-0">{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            ))}
+            {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => {
+              const navClassName = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all ${
+                isActive(item.href)
+                  ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
+                  : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
+              }`;
+              if (item.href === "/dashboard/mitre") {
+                return (
+                  <button
+                    key={item.href}
+                    onClick={() => { openMitre(); handleNavClick(); }}
+                    className={`${navClassName} w-full text-left`}
+                  >
+                    <span className="shrink-0">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                );
+              }
+              return (
+                <Link key={item.href} href={item.href} onClick={handleNavClick} className={navClassName}>
+                  <span className="shrink-0">{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
           </nav>
           <div className="border-t border-border p-3">
             {user && (
@@ -240,21 +252,32 @@ export function Sidebar({ mobile, open, onClose }: SidebarProps) {
       </div>
 
       <nav className="flex-1 py-3 px-2 overflow-y-auto flex flex-col gap-0.5">
-        {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all min-h-10 ${
-              isActive(item.href)
-                ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
-                : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
-            }`}
-            title={collapsed ? item.label : undefined}
-          >
-            <span className="shrink-0">{item.icon}</span>
-            {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
-          </Link>
-        ))}
+        {navItems.filter((item) => !item.adminOnly || user?.role === "ADMIN").map((item) => {
+          const navClassName = `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all min-h-10 ${
+            isActive(item.href)
+              ? "bg-surface-light text-primary font-semibold border-l-3 border-primary"
+              : "text-text-secondary hover:bg-surface-light hover:text-text border-l-3 border-transparent"
+          }`;
+          if (item.href === "/dashboard/mitre") {
+            return (
+              <button
+                key={item.href}
+                onClick={openMitre}
+                className={`${navClassName} w-full text-left`}
+                title={collapsed ? item.label : undefined}
+              >
+                <span className="shrink-0">{item.icon}</span>
+                {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+              </button>
+            );
+          }
+          return (
+            <Link key={item.href} href={item.href} className={navClassName} title={collapsed ? item.label : undefined}>
+              <span className="shrink-0">{item.icon}</span>
+              {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="border-t border-border p-2">

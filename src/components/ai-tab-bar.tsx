@@ -9,6 +9,8 @@ const TYPE_ICONS: Record<string, string> = {
   simulate: "M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z",
   batch_analyze: "M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z",
   batch_enhance: "M4 4h6v6H4V4zm10 0h6v6h-6V4zM4 14h6v6H4v-6zm10 0h6v6h-6v-6z",
+  rule_detail: "M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z M14 2v6h6",
+  mitre: "M3 3h8v8H3zM13 3h8v8h-8zM3 13h8v8H3zM13 13h8v8h-8z",
 };
 
 const TYPE_COLORS: Record<string, string> = {
@@ -18,6 +20,8 @@ const TYPE_COLORS: Record<string, string> = {
   simulate: "text-danger",
   batch_analyze: "text-primary",
   batch_enhance: "text-accent",
+  rule_detail: "text-[#4CBDFA]",
+  mitre: "text-[#A78BFA]",
 };
 
 export function AITabBar() {

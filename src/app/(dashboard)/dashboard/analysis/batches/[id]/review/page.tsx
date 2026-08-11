@@ -11,6 +11,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface ReviewItem {
   itemId: string;
@@ -43,6 +44,7 @@ export default function BatchReviewPage() {
   const router = useRouter();
   const batchId = params.id as string;
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
 
   const [items, setItems] = useState<ReviewItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,9 +271,9 @@ export default function BatchReviewPage() {
                         onChange={() => toggleSelected(item.itemId)}
                         disabled={item.applied}
                       />
-                      <Link href={`/dashboard/rules/${item.ruleId}`} className="font-medium text-text hover:text-primary truncate">
+                      <button onClick={() => openRule(item.ruleId, item.ruleTitle)} className="font-medium text-text hover:text-primary truncate text-left">
                         {item.ruleTitle}
-                      </Link>
+                      </button>
                       {item.deployed ? (
                         <Badge preset="deployed">Deployed</Badge>
                       ) : item.applied ? (

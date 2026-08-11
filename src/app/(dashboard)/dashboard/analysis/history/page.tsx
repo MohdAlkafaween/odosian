@@ -15,6 +15,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { BatchList } from "@/components/batch-list";
 import { DeploymentList } from "@/components/deployment-list";
 import { useOpenAnalysisTab } from "@/hooks/use-open-analysis-tab";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface AnalysisRecord {
   id: string;
@@ -50,6 +51,7 @@ export default function AnalysisHistoryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const openAnalysisTab = useOpenAnalysisTab();
+  const { openRule } = useOpenPageTab();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -127,9 +129,9 @@ export default function AnalysisHistoryPage() {
       render: (r: Record<string, unknown>) => {
         const row = r as unknown as AnalysisRecord;
         return row.rule ? (
-          <Link href={`/dashboard/rules/${row.rule.id}`} className="text-primary hover:underline text-sm">
+          <button onClick={() => openRule(row.rule!.id, row.rule!.title)} className="text-primary hover:underline text-sm text-left">
             {row.rule.title}
-          </Link>
+          </button>
         ) : <span className="text-text-muted text-sm">—</span>;
       },
     },

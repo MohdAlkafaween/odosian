@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import Link from "next/link";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface ChartData {
   scoreTrend: Array<{ date: string; avgScore: number; count: number }>;
@@ -85,6 +85,7 @@ function Odometer({ value, className, style }: { value: number; className?: stri
 
 /* ─── MITRE Kill Chain ─── */
 function MitreKillChain({ mitreCoverage }: { mitreCoverage: ChartData["mitreCoverage"] }) {
+  const { openMitre } = useOpenPageTab();
   const [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => setMounted(true), 200); return () => clearTimeout(t); }, []);
 
@@ -198,9 +199,9 @@ function MitreKillChain({ mitreCoverage }: { mitreCoverage: ChartData["mitreCove
               <span className="text-[10px] text-text-muted">rule mappings</span>
             </div>
           </div>
-          <Link href="/dashboard/mitre" className="text-[10px] font-semibold text-primary hover:text-primary-hover transition-colors uppercase tracking-wider">
+          <button onClick={openMitre} className="text-[10px] font-semibold text-primary hover:text-primary-hover transition-colors uppercase tracking-wider">
             Full Matrix →
-          </Link>
+          </button>
         </div>
       )}
     </div>

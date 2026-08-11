@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuthStore } from "@/stores/auth";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface Notification {
   id: string;
@@ -74,6 +75,7 @@ function playUrgentSound() {
 }
 
 export function NotificationBell() {
+  const { openRule } = useOpenPageTab();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
@@ -178,11 +180,6 @@ export function NotificationBell() {
       }
     } catch { /* */ }
     finally { setSending(false); }
-  };
-
-  const getLink = (n: Notification): string | null => {
-    if (n.targetType === "rule" && n.targetId) return `/dashboard/rules/${n.targetId}`;
-    return null;
   };
 
   const isUrgent = (n: Notification) => n.type === "urgent_broadcast";
@@ -305,11 +302,12 @@ export function NotificationBell() {
             )}
 
             {items.map((n) => {
-              const link = getLink(n);
+              const isRuleLink = n.targetType === "rule" && !!n.targetId;
               const urgent = isUrgent(n);
               const broadcast = isBroadcast(n);
-              const content = (
+              return (
                 <div
+                  key={n.id}
                   className={`flex items-start gap-3 px-4 py-3 hover:bg-surface-light/50 transition-colors border-b border-border/50 last:border-0 cursor-pointer ${
                     !n.isRead
                       ? urgent
@@ -317,7 +315,13 @@ export function NotificationBell() {
                         : "border-l-2 border-l-primary bg-primary/5"
                       : ""
                   }`}
-                  onClick={() => { if (!n.isRead) markAsRead(n.id); }}
+                  onClick={() => {
+                    if (!n.isRead) markAsRead(n.id);
+                    if (isRuleLink) {
+                      openRule(n.targetId, n.title);
+                      setOpen(false);
+                    }
+                  }}
                 >
                   <div className={`shrink-0 w-8 h-8 rounded-lg flex items-center justify-center mt-0.5 ${
                     urgent ? "bg-danger/15 text-danger" : broadcast ? "bg-accent/15 text-accent" : "bg-primary/15 text-primary"
@@ -341,10 +345,6 @@ export function NotificationBell() {
                   </div>
                 </div>
               );
-              if (link) {
-                return <a key={n.id} href={link}>{content}</a>;
-              }
-              return <div key={n.id}>{content}</div>;
             })}
           </div>
 

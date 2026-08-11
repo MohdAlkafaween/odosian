@@ -5,11 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { RuleForm, type RuleFormData } from "@/components/rule-form";
 import { useToastStore } from "@/stores/toast";
 import { Spinner } from "@/components/ui/loading";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 function CreateRuleContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
   const [loading, setLoading] = useState(false);
 
   const fromTemplate = searchParams.get("fromTemplate") === "1";
@@ -42,7 +44,7 @@ function CreateRuleContent() {
       }
 
       addToast("success", "Rule created successfully");
-      router.push(`/dashboard/rules/${result.rule.id}`);
+      openRule(result.rule.id, result.rule.title);
     } catch {
       addToast("error", "Something went wrong");
     } finally {

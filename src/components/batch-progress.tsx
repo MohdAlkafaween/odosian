@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 export interface BatchItem {
   id: string;
@@ -65,6 +66,7 @@ export function BatchProgress({ batchId, onStatusChange }: {
 }) {
   const { addToast } = useToastStore();
   const { addTab, updateTab } = useTabStore();
+  const { openRule } = useOpenPageTab();
   const [batch, setBatch] = useState<BatchDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [resuming, setResuming] = useState(false);
@@ -368,9 +370,9 @@ export function BatchProgress({ batchId, onStatusChange }: {
               {batch.items.map((item) => (
                 <tr key={item.id} className="border-b border-border last:border-0">
                   <td className="px-4 py-3">
-                    <Link href={`/dashboard/rules/${item.ruleId}`} className="text-primary hover:underline">
+                    <button onClick={() => openRule(item.ruleId, item.ruleTitle)} className="text-primary hover:underline text-left">
                       {item.ruleTitle}
-                    </Link>
+                    </button>
                   </td>
                   <td className={`px-4 py-3 font-medium ${ITEM_STATUS_STYLE[item.status] || ""}`}>
                     {item.status === "running" && <Spinner size="sm" />}

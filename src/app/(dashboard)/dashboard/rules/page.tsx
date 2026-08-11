@@ -14,6 +14,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { PageLoader } from "@/components/ui/loading";
 import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
+import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 
 interface AIFlags {
   analyzed: boolean;
@@ -124,6 +125,7 @@ function getCategoryColor(category: string): string {
 export default function RulesListPage() {
   const router = useRouter();
   const { addToast } = useToastStore();
+  const { openRule } = useOpenPageTab();
   const { addTab } = useTabStore();
 
   const [rules, setRules] = useState<RuleRow[]>([]);
@@ -443,9 +445,9 @@ export default function RulesListPage() {
       sortable: true,
       render: (row: RuleRow) => (
         <div className="flex flex-col gap-1">
-          <Link href={`/dashboard/rules/${row.id}`} className="text-primary hover:underline font-medium">
+          <button onClick={() => openRule(row.id, row.title)} className="text-primary hover:underline font-medium text-left">
             {row.title}
-          </Link>
+          </button>
           <div className="flex items-center gap-1.5 flex-wrap">
             {row.category && (
               <span
