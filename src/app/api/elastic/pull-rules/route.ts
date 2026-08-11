@@ -207,6 +207,14 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest) =
             references: JSON.stringify(er.references || []),
             investigationGuide: er.note || "",
             elasticRuleId: er.rule_id,
+            elasticEnabled: er.enabled,
+            // Never set here before — every rule pulled in had a live
+            // elasticRuleId but nothing recording *which* connection it came
+            // from, so anything needing to reach back out to Elastic for it
+            // (pause/resume, the sync check, single-rule pull) had no way to
+            // know which Kibana to call and failed with "No Elastic
+            // connection recorded."
+            elasticConnectionId: connection.id,
             license: er.license || "",
             timestampOverride: er.timestamp_override || "",
             relatedIntegrations: JSON.stringify(er.related_integrations || []),
