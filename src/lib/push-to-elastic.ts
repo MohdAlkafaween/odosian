@@ -5,6 +5,7 @@ import { elasticFetch, type ElasticFetchResponse } from "./elastic-fetch";
 import { deriveRequiredFields } from "./required-fields";
 import { setElasticRuleEnabled } from "./elastic-rule-status";
 import { checkElasticSync, snapshotOf } from "./elastic-sync-check";
+import { maybeAdvanceRuleStatus } from "./rule-status";
 
 interface ElasticThreat {
   framework: string;
@@ -376,6 +377,8 @@ export async function pushRuleToElastic(
       ...(autoCover ? { covered: true, coveredAt: new Date() } : {}),
     },
   });
+
+  await maybeAdvanceRuleStatus(ruleId);
 
   logAudit({
     userId,

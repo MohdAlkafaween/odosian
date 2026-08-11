@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { callAI, type EnhanceResult } from "./ai";
 import { analyzeRule } from "./analyze-rule";
+import { maybeAdvanceRuleStatus } from "./rule-status";
 
 // Mirrors the single-rule enhance route, but auto-runs an analysis first
 // when the rule hasn't been analyzed yet instead of asking the caller to
@@ -107,6 +108,8 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
       userId,
     },
   });
+
+  await maybeAdvanceRuleStatus(ruleId);
 
   return { analysis, result };
 }

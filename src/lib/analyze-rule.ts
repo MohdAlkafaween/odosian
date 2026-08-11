@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { callAI, type AnalyzeResult } from "./ai";
+import { maybeAdvanceRuleStatus } from "./rule-status";
 
 interface MitreRow {
   tacticId: string;
@@ -104,6 +105,8 @@ async function persistAnalysis(
       })),
     });
   }
+
+  if (analysisType === "analyze") await maybeAdvanceRuleStatus(ruleId);
 
   return analysis;
 }

@@ -4,6 +4,7 @@ import { requireRole, type AuthenticatedRequest } from "@/lib/middleware";
 import { errorResponse } from "@/lib/errors";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { setElasticRuleEnabled } from "@/lib/elastic-rule-status";
+import { maybeAdvanceRuleStatus } from "@/lib/rule-status";
 
 interface Body {
   enabled?: boolean;
@@ -41,6 +42,7 @@ export const POST = requireRole("ADMIN")(async (request: AuthenticatedRequest, c
     if (!ok) return errorResponse("Failed to update rule status in Elastic", 502);
 
     await prisma.rule.update({ where: { id }, data: { elasticEnabled: body.enabled } });
+    if (body.enabled) await maybeAdvanceRuleStatus(id);
 
     logAudit({
       userId: request.user.id,

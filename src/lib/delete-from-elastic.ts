@@ -2,6 +2,7 @@ import { prisma } from "./prisma";
 import { HttpError } from "./errors";
 import { logAudit } from "./audit";
 import { elasticFetch, type ElasticFetchResponse } from "./elastic-fetch";
+import { markRuleDeprecated } from "./rule-status";
 
 // Push and elastic-enabled cover create/update and pause/resume, but there
 // was no way to actually remove a rule from Elastic short of doing it
@@ -56,6 +57,8 @@ export async function deleteRuleFromElastic(ruleId: string, userId: string, ipAd
       coveredAt: null,
     },
   });
+
+  await markRuleDeprecated(ruleId);
 
   logAudit({
     userId,
