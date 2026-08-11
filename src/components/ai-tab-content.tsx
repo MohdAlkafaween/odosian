@@ -124,13 +124,18 @@ export function AITabContent() {
           <div className="flex flex-col items-center gap-3 py-16">
             <Spinner size="lg" />
             <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
-            {activeTab.type === "simulate" && (
+            {(activeTab.type === "simulate" || activeTab.type === "analyze" || activeTab.type === "enhance") && (
               <Button
                 size="sm"
                 variant="danger"
                 onClick={() => {
+                  // cancelTab aborts the underlying fetch, whose own catch
+                  // block sets a type-specific cancelled message right after
+                  // — this is just the fallback if that request somehow
+                  // wasn't registered (e.g. a tab reopened from persisted
+                  // storage with no live request behind it).
                   if (cancelTab(activeTab.id)) {
-                    updateTab(activeTab.id, { status: "failed", error: "Simulation cancelled" });
+                    updateTab(activeTab.id, { status: "failed", error: "Cancelled" });
                   }
                 }}
               >

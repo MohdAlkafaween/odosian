@@ -284,6 +284,81 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
     }
   };
 
+  const handleAnalyzeDirect = async () => {
+    if (!rule) return;
+    const label = rule.aiFlags?.enhanced ? "Post Analysis" : "Analyze";
+    const tabId = addTab({
+      type: "analyze",
+      title: `${label}: ${rule.title}`,
+      ruleId: rule.id,
+      ruleName: rule.title,
+      status: "running",
+      statusMessage: "AI is analyzing...",
+    });
+    const controller = new AbortController();
+    registerTabController(tabId, controller);
+    try {
+      const res = await fetch("/api/analysis/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId: rule.id }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tabId, { status: "completed", result: data.analysis });
+        setActiveTab(tabId);
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Analysis failed" });
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        updateTab(tabId, { status: "failed", error: "Analysis cancelled" });
+      } else {
+        updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+      }
+    } finally {
+      clearTabController(tabId);
+    }
+  };
+
+  const handleEnhanceDirect = async () => {
+    if (!rule) return;
+    const tabId = addTab({
+      type: "enhance",
+      title: `Enhance: ${rule.title}`,
+      ruleId: rule.id,
+      ruleName: rule.title,
+      status: "running",
+      statusMessage: "Enhancing rule...",
+    });
+    const controller = new AbortController();
+    registerTabController(tabId, controller);
+    try {
+      const res = await fetch("/api/analysis/enhance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ruleId: rule.id }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tabId, { status: "completed", result: data.analysis });
+        setActiveTab(tabId);
+      } else {
+        updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
+      }
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") {
+        updateTab(tabId, { status: "failed", error: "Enhancement cancelled" });
+      } else {
+        updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
+      }
+    } finally {
+      clearTabController(tabId);
+    }
+  };
+
   const checkSync = async () => {
     if (!rule?.elasticRuleId) return;
     setCheckingSync(true);
@@ -491,18 +566,10 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
               Simulate
             </span>
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/dashboard/analysis?tab=analyze&ruleId=${rule.id}`)}
-          >
+          <Button variant="outline" size="sm" onClick={handleAnalyzeDirect}>
             {rule.aiFlags?.enhanced ? "Post Analysis" : "Analyze"}
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate(`/dashboard/analysis?tab=enhance&ruleId=${rule.id}`)}
-          >
+          <Button variant="outline" size="sm" onClick={handleEnhanceDirect}>
             Enhance
           </Button>
           <Button variant="outline" size="sm" onClick={handleDuplicate} loading={duplicating}>
