@@ -11,25 +11,30 @@ import { computeBatchCounts } from "@/lib/batch-analysis";
 // or fail on its own, then processBatch's loop notices "cancelled" and stops
 // claiming anything further.
 export const POST = requireRole("DETECTION_ENG", "ADMIN")(async (request, context) => {
-  const { id } = await context.params as { id: string };
+  try {
+    const { id } = await context.params as { id: string };
 
-  const batch = await prisma.analysisBatch.findUnique({ where: { id } });
-  if (!batch) return errorResponse("Batch not found", 404);
-  if (!["pending", "running", "paused"].includes(batch.status)) {
-    return errorResponse(`Can't stop a batch that's ${batch.status}`, 400);
+    const batch = await prisma.analysisBatch.findUnique({ where: { id } });
+    if (!batch) return errorResponse("Batch not found", 404);
+    if (!["pending", "running", "paused"].includes(batch.status)) {
+      return errorResponse(`Can't stop a batch that's ${batch.status}`, 400);
+    }
+
+    await prisma.analysisBatch.update({ where: { id }, data: { status: "cancelled" } });
+    await prisma.analysisBatchItem.updateMany({
+      where: { batchId: id, status: "pending" },
+      data: { status: "skipped" },
+    });
+
+    const counts = await computeBatchCounts(id);
+    await prisma.analysisBatch.update({
+      where: { id },
+      data: { completedCount: counts.completed, failedCount: counts.failed, skippedCount: counts.skipped },
+    });
+
+    return NextResponse.json({ cancelled: true });
+  } catch (e) {
+    console.error("Failed to stop batch:", e);
+    return errorResponse("Failed to stop batch", 500);
   }
-
-  await prisma.analysisBatch.update({ where: { id }, data: { status: "cancelled" } });
-  await prisma.analysisBatchItem.updateMany({
-    where: { batchId: id, status: "pending" },
-    data: { status: "skipped" },
-  });
-
-  const counts = await computeBatchCounts(id);
-  await prisma.analysisBatch.update({
-    where: { id },
-    data: { completedCount: counts.completed, failedCount: counts.failed, skippedCount: counts.skipped },
-  });
-
-  return NextResponse.json({ cancelled: true });
 });
