@@ -147,6 +147,16 @@ export default function RulesListPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [startingBatch, setStartingBatch] = useState<"analyze" | "enhance" | null>(null);
   const [bulkPausing, setBulkPausing] = useState<"pause" | "resume" | null>(null);
+  const [activeBatch, setActiveBatch] = useState<{
+    id: string;
+    operation: string;
+    status: string;
+    totalCount: number;
+    completedCount: number;
+    failedCount: number;
+    skippedCount: number;
+  } | null>(null);
+  const [batchActing, setBatchActing] = useState<"pause" | "stop" | null>(null);
 
   useEffect(() => {
     fetch("/api/rules/categories")
@@ -261,6 +271,7 @@ export default function RulesListPage() {
           status: "running",
           statusMessage: `${operation === "analyze" ? "Analyzing" : "Enhancing"} ${count} rules...`,
         });
+        setActiveBatch({ id: data.batchId, operation, status: "pending", totalCount: count, completedCount: 0, failedCount: 0, skippedCount: 0 });
         setSelectedKeys(new Set());
       } else {
         addToast("error", data.error || `Failed to start batch ${operation}`);
@@ -269,6 +280,89 @@ export default function RulesListPage() {
       addToast("error", `Failed to start batch ${operation}`);
     } finally {
       setStartingBatch(null);
+    }
+  };
+
+  // Polls the batch this page itself just started so Pause/Abort can live
+  // right in the bulk toolbar — previously the only way to reach them was
+  // switching to the tab BatchProgress opens in.
+  useEffect(() => {
+    if (!activeBatch || ["completed", "partial", "failed", "cancelled"].includes(activeBatch.status)) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/analysis/batch/${activeBatch.id}`);
+        const data = await res.json();
+        if (res.ok) {
+          setActiveBatch({
+            id: data.batch.id,
+            operation: data.batch.operation,
+            status: data.batch.status,
+            totalCount: data.batch.totalCount,
+            completedCount: data.batch.completedCount,
+            failedCount: data.batch.failedCount,
+            skippedCount: data.batch.skippedCount,
+          });
+        }
+      } catch { /* ignore */ }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [activeBatch]);
+
+  const handleActiveBatchPause = async () => {
+    if (!activeBatch) return;
+    setBatchActing("pause");
+    try {
+      const res = await fetch(`/api/analysis/batch/${activeBatch.id}/pause`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("info", "Paused — remaining rules stayed untouched");
+        setActiveBatch((prev) => prev ? { ...prev, status: "paused" } : prev);
+      } else {
+        addToast("error", data.error || "Failed to pause");
+      }
+    } catch {
+      addToast("error", "Failed to pause");
+    } finally {
+      setBatchActing(null);
+    }
+  };
+
+  const handleActiveBatchStop = async () => {
+    if (!activeBatch) return;
+    if (!confirm("Abort this batch? Every rule not yet processed will be marked skipped and won't run.")) return;
+    setBatchActing("stop");
+    try {
+      const res = await fetch(`/api/analysis/batch/${activeBatch.id}/stop`, { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        addToast("info", "Batch aborted");
+        setActiveBatch((prev) => prev ? { ...prev, status: "cancelled" } : prev);
+      } else {
+        addToast("error", data.error || "Failed to abort");
+      }
+    } catch {
+      addToast("error", "Failed to abort");
+    } finally {
+      setBatchActing(null);
+    }
+  };
+
+  const handleActiveBatchResume = async () => {
+    if (!activeBatch) return;
+    setBatchActing("pause");
+    try {
+      const res = await fetch(`/api/analysis/batch/${activeBatch.id}/resume`, { method: "POST" });
+      if (res.ok) {
+        addToast("info", "Resuming batch");
+        setActiveBatch((prev) => prev ? { ...prev, status: "running" } : prev);
+      } else {
+        const data = await res.json();
+        addToast("error", data.error || "Failed to resume");
+      }
+    } catch {
+      addToast("error", "Failed to resume");
+    } finally {
+      setBatchActing(null);
     }
   };
 
@@ -519,6 +613,36 @@ export default function RulesListPage() {
           </div>
         )}
       </div>
+
+      {activeBatch && (
+        <div className="flex items-center gap-3 bg-surface-light border border-border rounded-lg px-3 py-2 mb-4">
+          <span className="text-xs font-semibold text-text">
+            {activeBatch.operation === "analyze" ? "Analyzing" : "Enhancing"} —{" "}
+            <span className="text-text-secondary font-normal">
+              {activeBatch.status}, {activeBatch.completedCount + activeBatch.failedCount + activeBatch.skippedCount}/{activeBatch.totalCount}
+            </span>
+          </span>
+          {(activeBatch.status === "pending" || activeBatch.status === "running") && (
+            <Button size="sm" variant="outline" onClick={handleActiveBatchPause} loading={batchActing === "pause"} disabled={!!batchActing}>
+              Pause
+            </Button>
+          )}
+          {(activeBatch.status === "pending" || activeBatch.status === "running" || activeBatch.status === "paused") && (
+            <Button size="sm" variant="danger" onClick={handleActiveBatchStop} loading={batchActing === "stop"} disabled={!!batchActing}>
+              Abort
+            </Button>
+          )}
+          {activeBatch.status === "paused" && (
+            <Button size="sm" variant="outline" onClick={handleActiveBatchResume} loading={batchActing === "pause"} disabled={!!batchActing}>
+              Resume
+            </Button>
+          )}
+          <Link href={`/dashboard/analysis/batches/${activeBatch.id}`} className="text-xs text-primary hover:underline ml-auto">
+            View
+          </Link>
+          <button onClick={() => setActiveBatch(null)} className="text-xs text-text-muted hover:text-text">Dismiss</button>
+        </div>
+      )}
 
       {loading ? (
         <PageLoader />
