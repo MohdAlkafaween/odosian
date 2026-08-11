@@ -89,7 +89,17 @@ export default function AnalysisDetailPage() {
         <Card>
           <CardHeader><h3 className="font-semibold text-text">Source Rule</h3></CardHeader>
           <CardBody>
-            <p className="text-sm text-text mb-2">{analysis.rule.title}</p>
+            <Link
+              href={`/dashboard/rules/${analysis.rule.id}`}
+              className="group flex items-center justify-between gap-3 -mx-3 -mt-1 mb-4 px-3 py-2.5 rounded-lg hover:bg-surface-light transition-colors"
+            >
+              <span className="text-xl font-bold text-text group-hover:text-primary transition-colors">
+                {analysis.rule.title}
+              </span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted group-hover:text-primary transition-colors shrink-0">
+                <path d="M5 12h14M12 5l7 7-7 7" />
+              </svg>
+            </Link>
             <CodeBlock code={analysis.rule.query} language={analysis.rule.language} />
           </CardBody>
         </Card>

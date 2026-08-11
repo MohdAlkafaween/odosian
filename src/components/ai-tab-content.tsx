@@ -66,18 +66,6 @@ export function AITabContent() {
               {activeTab.status === "failed" && <Badge preset="critical">Failed</Badge>}
             </div>
             <h1 className="text-xl font-bold text-text">{activeTab.title}</h1>
-            {activeTab.ruleName && (
-              <p className="text-sm text-text-muted mt-0.5">
-                Rule:{" "}
-                {activeTab.ruleId ? (
-                  <Link href={`/dashboard/rules/${activeTab.ruleId}`} className="text-primary hover:underline">
-                    {activeTab.ruleName}
-                  </Link>
-                ) : (
-                  activeTab.ruleName
-                )}
-              </p>
-            )}
           </div>
           <div className="flex items-center gap-2">
             {activeTab.ruleId && (
@@ -94,6 +82,21 @@ export function AITabContent() {
             </Button>
           </div>
         </div>
+
+        {activeTab.ruleName && activeTab.ruleId && (
+          <Link
+            href={`/dashboard/rules/${activeTab.ruleId}`}
+            className="group flex items-center justify-between gap-3 mb-6 px-4 py-3 rounded-xl border border-border bg-surface/80 hover:border-primary/50 hover:bg-surface transition-colors"
+          >
+            <div className="min-w-0">
+              <p className="text-[10px] text-text-muted uppercase tracking-wider mb-0.5">Rule</p>
+              <p className="text-lg font-bold text-text group-hover:text-primary transition-colors truncate">{activeTab.ruleName}</p>
+            </div>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted group-hover:text-primary transition-colors shrink-0">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </Link>
+        )}
 
         {isBatchType(activeTab.type) && activeTab.batchId && (
           <BatchProgress batchId={activeTab.batchId} onStatusChange={handleBatchStatusChange} />

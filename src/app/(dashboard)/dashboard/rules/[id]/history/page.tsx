@@ -9,6 +9,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { PageLoader } from "@/components/ui/loading";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { DeploymentList } from "@/components/deployment-list";
+import { useOpenAnalysisTab } from "@/hooks/use-open-analysis-tab";
 
 interface AnalysisRecord {
   id: string;
@@ -51,6 +52,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function RuleAnalysisHistoryPage() {
   const params = useParams();
+  const openAnalysisTab = useOpenAnalysisTab();
   const [ruleTitle, setRuleTitle] = useState("");
   const [ruleLanguage, setRuleLanguage] = useState("kuery");
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
@@ -405,12 +407,12 @@ export default function RuleAnalysisHistoryPage() {
                       {a.modelUsed && <span>Model: {a.modelUsed}</span>}
                       {a.tokensUsed !== null && a.tokensUsed > 0 && <span>{a.tokensUsed.toLocaleString()} tokens</span>}
                       {a.latencyMs !== null && a.latencyMs > 0 && <span>{(a.latencyMs / 1000).toFixed(1)}s</span>}
-                      <Link
-                        href={`/dashboard/analysis/${a.id}`}
+                      <button
+                        onClick={() => openAnalysisTab(a.id, a.analysisType, params.id as string, ruleTitle)}
                         className="ml-auto text-primary hover:underline text-[11px]"
                       >
                         View Full Details &rarr;
-                      </Link>
+                      </button>
                     </div>
                   </CardBody>
                 )}

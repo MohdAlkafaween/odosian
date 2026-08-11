@@ -14,6 +14,7 @@ import { Spinner } from "@/components/ui/loading";
 import { Tabs } from "@/components/ui/tabs";
 import { BatchList } from "@/components/batch-list";
 import { DeploymentList } from "@/components/deployment-list";
+import { useOpenAnalysisTab } from "@/hooks/use-open-analysis-tab";
 
 interface AnalysisRecord {
   id: string;
@@ -48,6 +49,7 @@ const TYPE_LABELS: Record<string, string> = {
 export default function AnalysisHistoryPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const openAnalysisTab = useOpenAnalysisTab();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -153,9 +155,9 @@ export default function AnalysisHistoryPage() {
       render: (r: Record<string, unknown>) => {
         const row = r as unknown as AnalysisRecord;
         return (
-          <Link href={`/dashboard/analysis/${row.id}`}>
-            <Button variant="ghost" size="sm">View</Button>
-          </Link>
+          <Button variant="ghost" size="sm" onClick={() => openAnalysisTab(row.id, row.analysisType, row.rule?.id, row.rule?.title)}>
+            View
+          </Button>
         );
       },
     },

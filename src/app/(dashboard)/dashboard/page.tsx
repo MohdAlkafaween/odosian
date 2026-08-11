@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { PageLoader } from "@/components/ui/loading";
 import { DashboardCharts } from "@/components/dashboard-charts";
 import { useAuthStore } from "@/stores/auth";
+import { useOpenAnalysisTab } from "@/hooks/use-open-analysis-tab";
 
 interface DashboardStats {
   stats: {
@@ -69,6 +70,7 @@ function Odometer({ value, className, style }: { value: number; className?: stri
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
+  const openAnalysisTab = useOpenAnalysisTab();
   const [data, setData] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -244,7 +246,7 @@ export default function DashboardPage() {
                   <div
                     key={a.id}
                     className="px-4 py-3 flex items-center gap-4 hover:bg-white/[0.015] cursor-pointer transition-colors group"
-                    onClick={() => window.location.href = `/dashboard/analysis/${a.id}`}
+                    onClick={() => openAnalysisTab(a.id, a.analysisType, a.rule?.id, a.rule?.title)}
                   >
                     <span className="font-mono text-[10px] text-text-muted tabular-nums w-5">{String(idx + 1).padStart(2, "0")}</span>
                     <div className="flex-1 min-w-0">
