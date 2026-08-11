@@ -125,46 +125,63 @@ export default function DashboardPage() {
             sub: stats?.totalRules
               ? `${Math.round(((stats.coveredRules ?? 0) / stats.totalRules) * 100)}% COVERED`
               : null,
+            href: "/dashboard/rules",
           },
           {
             label: "ANALYSES",
             value: stats?.totalAnalyses ?? 0,
             color: "#A78BFA",
             sub: null,
+            href: "/dashboard/analysis/history",
           },
           {
             label: "AVG SCORE",
             value: stats?.avgScore ?? 0,
             color: scoreColor(stats?.avgScore || 0),
             sub: ratingLabel(stats?.avgScore || 0),
+            href: null,
           },
           {
             label: "CRITICAL",
             value: stats?.criticalFindings ?? 0,
             color: (stats?.criticalFindings || 0) > 0 ? "#EF4444" : "#34D399",
             sub: (stats?.criticalFindings || 0) > 0 ? "NEEDS ATTENTION" : "CLEAR",
+            href: "/dashboard/analysis/history?critical=true",
           },
-        ].map((card) => (
-          <div
-            key={card.label}
-            className="bg-surface/80 rounded-xl border border-border px-4 py-3"
-          >
-            <div className="text-[9px] text-text-muted font-mono tracking-[2px] mb-1.5">{card.label}</div>
-            <div className="flex items-baseline gap-1.5">
-              <Odometer
-                value={card.value}
-                className="font-mono text-2xl font-bold tabular-nums leading-none"
-                style={{ color: card.color }}
-              />
-              {card.label === "AVG SCORE" && <span className="text-[11px] text-text-muted font-mono">/100</span>}
-            </div>
-            {card.sub && (
-              <div className="text-[8px] font-mono tracking-widest mt-1" style={{ color: card.color, opacity: 0.7 }}>
-                {card.sub}
+        ].map((card) => {
+          const body = (
+            <>
+              <div className="text-[9px] text-text-muted font-mono tracking-[2px] mb-1.5">{card.label}</div>
+              <div className="flex items-baseline gap-1.5">
+                <Odometer
+                  value={card.value}
+                  className="font-mono text-2xl font-bold tabular-nums leading-none"
+                  style={{ color: card.color }}
+                />
+                {card.label === "AVG SCORE" && <span className="text-[11px] text-text-muted font-mono">/100</span>}
               </div>
-            )}
-          </div>
-        ))}
+              {card.sub && (
+                <div className="text-[8px] font-mono tracking-widest mt-1" style={{ color: card.color, opacity: 0.7 }}>
+                  {card.sub}
+                </div>
+              )}
+            </>
+          );
+
+          return card.href ? (
+            <Link
+              key={card.label}
+              href={card.href}
+              className="bg-surface/80 rounded-xl border border-border px-4 py-3 transition-colors hover:border-border-focus hover:bg-surface cursor-pointer"
+            >
+              {body}
+            </Link>
+          ) : (
+            <div key={card.label} className="bg-surface/80 rounded-xl border border-border px-4 py-3">
+              {body}
+            </div>
+          );
+        })}
       </div>
 
       {/* Charts Section */}

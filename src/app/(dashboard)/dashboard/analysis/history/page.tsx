@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,24 +47,30 @@ const TYPE_LABELS: Record<string, string> = {
 
 export default function AnalysisHistoryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [filterType, setFilterType] = useState("");
+  // Seeded from the dashboard's "Critical" stat card link
+  // (/dashboard/analysis/history?critical=true) — not just a local toggle,
+  // so landing here from that card shows exactly what it counted.
+  const [criticalOnly, setCriticalOnly] = useState(() => searchParams.get("critical") === "true");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (filterType) params.set("analysisType", filterType);
+      if (criticalOnly) params.set("critical", "true");
       const res = await fetch(`/api/analysis?${params}`);
       const data = await res.json();
       setAnalyses(data.analyses || []);
       setTotalPages(data.pagination?.totalPages || 1);
     } catch { /* ignore */ }
     finally { setLoading(false); }
-  }, [page, filterType]);
+  }, [page, filterType, criticalOnly]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -190,6 +196,14 @@ export default function AnalysisHistoryPage() {
                       { value: "simulate", label: "Simulation" },
                     ]}
                   />
+                  <label className="flex items-center gap-2 text-sm text-text-secondary pb-2.5">
+                    <input
+                      type="checkbox"
+                      checked={criticalOnly}
+                      onChange={(e) => { setCriticalOnly(e.target.checked); setPage(1); }}
+                    />
+                    Critical findings only
+                  </label>
                 </div>
               </CardBody>
             </Card>

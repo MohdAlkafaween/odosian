@@ -22,12 +22,19 @@ export const GET = authenticate(async (request: AuthenticatedRequest) => {
     const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get("limit") || "20")));
     const analysisType = url.searchParams.get("analysisType") || "";
     const ruleId = url.searchParams.get("ruleId") || "";
+    const critical = url.searchParams.get("critical") === "true";
     const sortBy = url.searchParams.get("sortBy") || "createdAt";
     const sortDir = url.searchParams.get("sortDir") === "asc" ? "asc" : "desc";
 
     const where: Record<string, unknown> = {};
     if (analysisType) where.analysisType = analysisType;
     if (ruleId) where.ruleId = ruleId;
+    // Same substring match the dashboard's "Critical" stat card uses to
+    // count these in the first place — a proper JSON query isn't available
+    // on findings (stored as a plain string column), but every finding
+    // object is serialized with double-quoted keys, so this can't
+    // false-positive on anything other than an actual critical finding.
+    if (critical) where.findings = { contains: '"severity":"critical"' };
 
     const allowedSorts = ["createdAt", "score", "analysisType"];
     const orderField = allowedSorts.includes(sortBy) ? sortBy : "createdAt";
