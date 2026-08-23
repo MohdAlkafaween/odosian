@@ -6,7 +6,7 @@ import {
   engineGenerateSSE,
   EngineUnavailableError,
 } from "@/lib/engine-client";
-import { buildRuleMessage } from "@/lib/analyze-rule";
+import { buildRuleJson } from "@/lib/analyze-rule";
 import { prisma } from "@/lib/prisma";
 
 const AI_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_AI || "10");
@@ -41,7 +41,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
             { status: 404, headers: { "Content-Type": "application/json" } },
           );
         }
-        const ruleMessage = buildRuleMessage(
+        const ruleJson = buildRuleJson(
           rule as unknown as Record<string, unknown>,
           rule.mitreMappings,
         );
@@ -49,13 +49,13 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
         if (operation === "enhance") {
           engineRes = await engineEnhanceSSE({
             user_id: request.user.id,
-            rule_text: ruleMessage,
+            rule_text: ruleJson,
             rule_id: ruleId,
           });
         } else {
           engineRes = await engineAnalyzeSSE({
             user_id: request.user.id,
-            rule_text: ruleMessage,
+            rule_text: ruleJson,
             rule_id: ruleId,
           });
         }

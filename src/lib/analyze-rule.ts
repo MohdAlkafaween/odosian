@@ -12,6 +12,55 @@ interface MitreRow {
   subTechniqueName: string | null;
 }
 
+// Serialize a Prisma rule into the JSON format the engine's Elastic parser expects.
+export function buildRuleJson(rule: Record<string, unknown>, mitreMappings: MitreRow[]): string {
+  const parse = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v || []);
+  const tags: string[] = parse(rule.tags);
+  const fps: string[] = parse(rule.falsePositives);
+  const refs: string[] = parse(rule.references);
+  const indexRaw = rule.index as string | undefined;
+  const indices = indexRaw ? indexRaw.split(",").map((s: string) => s.trim()).filter(Boolean) : [];
+
+  // Build Elastic-format threat array from MITRE mappings
+  const tacticGroups = new Map<string, { tactic: { id: string; name: string }; techniques: Map<string, { id: string; name: string; subtechniques: { id: string; name: string }[] }> }>();
+  for (const m of mitreMappings) {
+    if (!tacticGroups.has(m.tacticId)) {
+      tacticGroups.set(m.tacticId, { tactic: { id: m.tacticId, name: m.tacticName }, techniques: new Map() });
+    }
+    const group = tacticGroups.get(m.tacticId)!;
+    if (m.techniqueId && !group.techniques.has(m.techniqueId)) {
+      group.techniques.set(m.techniqueId, { id: m.techniqueId, name: m.techniqueName, subtechniques: [] });
+    }
+    if (m.techniqueId && m.subTechniqueId) {
+      group.techniques.get(m.techniqueId)!.subtechniques.push({ id: m.subTechniqueId, name: m.subTechniqueName || "" });
+    }
+  }
+  const threat = Array.from(tacticGroups.values()).map((g) => ({
+    tactic: g.tactic,
+    technique: Array.from(g.techniques.values()).map((t) => ({
+      id: t.id,
+      name: t.name,
+      subtechnique: t.subtechniques.length > 0 ? t.subtechniques : undefined,
+    })),
+  }));
+
+  return JSON.stringify({
+    name: rule.title,
+    description: rule.description || "",
+    rule_id: rule.elasticRuleId || rule.id,
+    type: rule.ruleType,
+    severity: rule.severity,
+    risk_score: rule.riskScore,
+    query: rule.query,
+    language: rule.language,
+    index: indices,
+    tags,
+    false_positives: fps,
+    references: refs,
+    threat: threat.length > 0 ? threat : undefined,
+  });
+}
+
 export function buildRuleMessage(rule: Record<string, unknown>, mitreMappings: MitreRow[]): string {
   const parse = (v: unknown) => (typeof v === "string" ? JSON.parse(v) : v || []);
   const tags: string[] = parse(rule.tags);
@@ -122,7 +171,9 @@ export async function analyzeRule(ruleId: string, userId: string) {
   });
   if (!rule) throw new Error("Rule not found");
 
-  const ruleMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+  const ruleObj = rule as unknown as Record<string, unknown>;
+  const ruleJson = buildRuleJson(ruleObj, rule.mitreMappings);
+  const ruleMessage = buildRuleMessage(ruleObj, rule.mitreMappings);
 
   let result: AnalyzeResult;
   let modelUsed: string;
@@ -132,7 +183,7 @@ export async function analyzeRule(ruleId: string, userId: string) {
   try {
     const engineResult = await engineAnalyze({
       user_id: userId,
-      rule_text: ruleMessage,
+      rule_text: ruleJson,
       rule_id: ruleId,
     });
     result = engineResult.result;
@@ -166,10 +217,11 @@ export async function postEnhanceAnalyzeRule(ruleId: string, userId: string, enh
   if (!rule) throw new Error("Rule not found");
 
   const originalQuery = rule.query;
-  const ruleWithEnhancedQuery = { ...(rule as unknown as Record<string, unknown>), query: enhancedQuery };
+  const ruleObj = { ...(rule as unknown as Record<string, unknown>), query: enhancedQuery };
+  const ruleJson = buildRuleJson(ruleObj, rule.mitreMappings);
   const postEnhanceMessage = `This is a POST-ENHANCEMENT analysis. Compare the original query against the enhanced query and evaluate the improvements.
 
-${buildRuleMessage(ruleWithEnhancedQuery, rule.mitreMappings)}
+${buildRuleMessage(ruleObj, rule.mitreMappings)}
 
 Original Query (before enhancement):
 ${originalQuery}`;
@@ -182,7 +234,7 @@ ${originalQuery}`;
   try {
     const engineResult = await engineAnalyze({
       user_id: userId,
-      rule_text: postEnhanceMessage,
+      rule_text: ruleJson,
       rule_id: ruleId,
     });
     result = engineResult.result;

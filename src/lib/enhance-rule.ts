@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { callAI, type EnhanceResult } from "./ai";
-import { analyzeRule, buildRuleMessage } from "./analyze-rule";
+import { analyzeRule, buildRuleJson } from "./analyze-rule";
 import { engineEnhance, EngineUnavailableError } from "./engine-client";
 import { maybeAdvanceRuleStatus } from "./rule-status";
 
@@ -96,10 +96,10 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
   let latencyMs: number;
 
   try {
-    const ruleMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+    const ruleJson = buildRuleJson(rule as unknown as Record<string, unknown>, rule.mitreMappings);
     const engineResult = await engineEnhance({
       user_id: userId,
-      rule_text: ruleMessage,
+      rule_text: ruleJson,
       rule_id: ruleId,
     });
     result = engineResult.result;
