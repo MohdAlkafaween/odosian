@@ -9,3 +9,4 @@ data:
   RATE_LIMIT_AI: "10"
   RATE_LIMIT_AUTH: "5"
   RATE_LIMIT_GENERAL: "60"
+  ENGINE_URL: "http://odosian-engine:8000"
