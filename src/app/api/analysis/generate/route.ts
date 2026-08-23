@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, rateLimit, type AuthenticatedRequest } from "@/lib/middleware";
 import { generateSchema, validateRequest } from "@/lib/validation";
 import { callAI, type GenerateResult } from "@/lib/ai";
+import { engineGenerate, EngineUnavailableError } from "@/lib/engine-client";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse, aiErrorResponse } from "@/lib/errors";
 
@@ -16,7 +17,31 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
 
       const { description, saveAsRule } = validated.data;
 
-      const { result, modelUsed, tokensUsed, latencyMs } = await callAI<GenerateResult>("generate", description);
+      let result: GenerateResult;
+      let modelUsed: string;
+      let tokensUsed: number;
+      let latencyMs: number;
+
+      try {
+        const engineResult = await engineGenerate({
+          user_id: request.user.id,
+          requirement: description,
+        });
+        result = engineResult.result;
+        modelUsed = engineResult.modelUsed;
+        tokensUsed = engineResult.tokensUsed;
+        latencyMs = engineResult.latencyMs;
+      } catch (e) {
+        if (e instanceof EngineUnavailableError) {
+          const fallback = await callAI<GenerateResult>("generate", description);
+          result = fallback.result;
+          modelUsed = fallback.modelUsed;
+          tokensUsed = fallback.tokensUsed;
+          latencyMs = fallback.latencyMs;
+        } else {
+          throw e;
+        }
+      }
 
       const analysis = await prisma.analysis.create({
         data: {

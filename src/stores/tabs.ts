@@ -34,6 +34,8 @@ export interface AITab {
   statusMessage?: string;
   result?: AnalyzeResult | (EnhanceResult & { inputQuery?: string }) | GenerateResult | SimulateResult;
   error?: string;
+  validationRejection?: { category: string; issues: string[] };
+  useEngine?: boolean;
   createdAt: number;
 }
 

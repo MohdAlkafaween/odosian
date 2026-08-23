@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
+import { PipelineProgress } from "@/components/ui/pipeline-progress";
 import { Button } from "@/components/ui/button";
 import { BatchProgress } from "@/components/batch-progress";
 import { useToastStore } from "@/stores/toast";
@@ -35,6 +36,49 @@ const TYPE_BADGE_PRESET: Record<string, string> = {
 };
 
 const isBatchType = (type: TabType) => type === "batch_analyze" || type === "batch_enhance";
+
+function RetryButton({ tab }: { tab: AITab }) {
+  const { updateTab } = useTabStore();
+  const [retrying, setRetrying] = useState(false);
+
+  const retry = async () => {
+    setRetrying(true);
+    updateTab(tab.id, { status: "running", error: undefined, validationRejection: undefined, statusMessage: "Retrying..." });
+
+    const endpoint = tab.type === "analyze" ? "/api/analysis/analyze" :
+                     tab.type === "enhance" ? "/api/analysis/enhance" :
+                     "/api/analysis/generate";
+
+    const body: Record<string, unknown> = {};
+    if (tab.ruleId) body.ruleId = tab.ruleId;
+
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        updateTab(tab.id, { status: "completed", result: data.analysis });
+      } else if (res.status === 422 && data.validationRejection) {
+        updateTab(tab.id, { status: "failed", error: data.error || "Quality check failed", validationRejection: { category: data.category, issues: data.issues || [] } });
+      } else {
+        updateTab(tab.id, { status: "failed", error: data.error || "Retry failed" });
+      }
+    } catch {
+      updateTab(tab.id, { status: "failed", error: "Failed to connect to server" });
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <Button size="sm" variant="outline" onClick={retry} disabled={retrying}>
+      {retrying ? "Retrying..." : "Retry"}
+    </Button>
+  );
+}
 
 export function AITabContent() {
   const { tabs, activeTabId, setActiveTab, removeTab, updateTab } = useTabStore();
@@ -120,7 +164,48 @@ export function AITabContent() {
           <BatchProgress batchId={activeTab.batchId} onStatusChange={handleBatchStatusChange} />
         )}
 
-        {!isBatchType(activeTab.type) && activeTab.status === "running" && (
+        {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && (activeTab.type === "analyze" || activeTab.type === "enhance" || activeTab.type === "generate") && (
+          <PipelineProgress
+            tabId={activeTab.id}
+            endpoint="/api/analysis/stream"
+            body={{
+              operation: activeTab.type,
+              ruleId: activeTab.ruleId,
+            }}
+            onComplete={(result) => {
+              const data = result as Record<string, unknown>;
+              const analysis = data.analysis || data;
+              updateTab(activeTab.id, { status: "completed", result: analysis as AnalyzeResult });
+            }}
+            onError={async (error, validationRejection) => {
+              if (validationRejection) {
+                updateTab(activeTab.id, { status: "failed", error, validationRejection });
+                return;
+              }
+              if (error.includes("unavailable") || error.includes("fallback")) {
+                updateTab(activeTab.id, { useEngine: false, statusMessage: "Using direct AI provider..." });
+                const endpoint = activeTab.type === "enhance" ? "/api/analysis/enhance" : activeTab.type === "generate" ? "/api/analysis/generate" : "/api/analysis/analyze";
+                const body: Record<string, unknown> = {};
+                if (activeTab.ruleId) body.ruleId = activeTab.ruleId;
+                try {
+                  const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                  const data = await res.json();
+                  if (res.ok) {
+                    updateTab(activeTab.id, { status: "completed", result: data.analysis });
+                  } else {
+                    updateTab(activeTab.id, { status: "failed", error: data.error || "Failed" });
+                  }
+                } catch {
+                  updateTab(activeTab.id, { status: "failed", error: "Failed to connect to server" });
+                }
+              } else {
+                updateTab(activeTab.id, { status: "failed", error });
+              }
+            }}
+          />
+        )}
+
+        {!isBatchType(activeTab.type) && activeTab.status === "running" && !activeTab.useEngine && (
           <div className="flex flex-col items-center gap-3 py-16">
             <Spinner size="lg" />
             <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
@@ -129,11 +214,6 @@ export function AITabContent() {
                 size="sm"
                 variant="danger"
                 onClick={() => {
-                  // cancelTab aborts the underlying fetch, whose own catch
-                  // block sets a type-specific cancelled message right after
-                  // — this is just the fallback if that request somehow
-                  // wasn't registered (e.g. a tab reopened from persisted
-                  // storage with no live request behind it).
                   if (cancelTab(activeTab.id)) {
                     updateTab(activeTab.id, { status: "failed", error: "Cancelled" });
                   }
@@ -145,7 +225,43 @@ export function AITabContent() {
           </div>
         )}
 
-        {!isBatchType(activeTab.type) && activeTab.status === "failed" && (
+        {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && activeTab.type === "simulate" && (
+          <div className="flex flex-col items-center gap-3 py-16">
+            <Spinner size="lg" />
+            <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
+          </div>
+        )}
+
+        {!isBatchType(activeTab.type) && activeTab.status === "failed" && activeTab.validationRejection && (
+          <Card className="border-warning/40 bg-warning/5">
+            <CardBody>
+              <div className="flex items-start gap-3">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-warning shrink-0 mt-0.5">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-warning mb-1">Quality Check Failed</p>
+                  <p className="text-sm text-text-secondary mb-3">
+                    The AI engine rejected this result because it couldn&apos;t verify all claims against its knowledge base.
+                    This happens in about 1 in 11 requests. Click Retry to try again.
+                  </p>
+                  {activeTab.validationRejection.issues.length > 0 && (
+                    <ul className="text-xs text-text-muted space-y-1 mb-3 list-disc list-inside">
+                      {activeTab.validationRejection.issues.map((issue, i) => (
+                        <li key={i}>{issue}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <RetryButton tab={activeTab} />
+                </div>
+              </div>
+            </CardBody>
+          </Card>
+        )}
+
+        {!isBatchType(activeTab.type) && activeTab.status === "failed" && !activeTab.validationRejection && (
           <Card>
             <CardBody>
               <div className="flex items-center gap-3 text-danger">

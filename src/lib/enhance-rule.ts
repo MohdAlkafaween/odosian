@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { callAI, type EnhanceResult } from "./ai";
-import { analyzeRule } from "./analyze-rule";
+import { analyzeRule, buildRuleMessage } from "./analyze-rule";
+import { engineEnhance, EngineUnavailableError } from "./engine-client";
 import { maybeAdvanceRuleStatus } from "./rule-status";
 
 // Mirrors the single-rule enhance route, but auto-runs an analysis first
@@ -89,7 +90,33 @@ ${suggestions.map((s: { priority: number; title: string; description: string }) 
 Weaknesses:
 ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
 
-  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<EnhanceResult>("enhance", userMessage);
+  let result: EnhanceResult;
+  let modelUsed: string;
+  let tokensUsed: number;
+  let latencyMs: number;
+
+  try {
+    const ruleMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
+    const engineResult = await engineEnhance({
+      user_id: userId,
+      rule_text: ruleMessage,
+      rule_id: ruleId,
+    });
+    result = engineResult.result;
+    modelUsed = engineResult.modelUsed;
+    tokensUsed = engineResult.tokensUsed;
+    latencyMs = engineResult.latencyMs;
+  } catch (e) {
+    if (e instanceof EngineUnavailableError) {
+      const fallback = await callAI<EnhanceResult>("enhance", userMessage);
+      result = fallback.result;
+      modelUsed = fallback.modelUsed;
+      tokensUsed = fallback.tokensUsed;
+      latencyMs = fallback.latencyMs;
+    } else {
+      throw e;
+    }
+  }
 
   const analysis = await prisma.analysis.create({
     data: {

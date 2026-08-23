@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { callAI, type AnalyzeResult } from "./ai";
+import { engineAnalyze, EngineUnavailableError } from "./engine-client";
 import { maybeAdvanceRuleStatus } from "./rule-status";
 
 interface MitreRow {
@@ -121,10 +122,36 @@ export async function analyzeRule(ruleId: string, userId: string) {
   });
   if (!rule) throw new Error("Rule not found");
 
-  const userMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
-  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
-  const analysis = await persistAnalysis(rule.id, userId, "analyze", rule.query, result, modelUsed, tokensUsed, latencyMs);
+  const ruleMessage = buildRuleMessage(rule as unknown as Record<string, unknown>, rule.mitreMappings);
 
+  let result: AnalyzeResult;
+  let modelUsed: string;
+  let tokensUsed: number;
+  let latencyMs: number;
+
+  try {
+    const engineResult = await engineAnalyze({
+      user_id: userId,
+      rule_text: ruleMessage,
+      rule_id: ruleId,
+    });
+    result = engineResult.result;
+    modelUsed = engineResult.modelUsed;
+    tokensUsed = engineResult.tokensUsed;
+    latencyMs = engineResult.latencyMs;
+  } catch (e) {
+    if (e instanceof EngineUnavailableError) {
+      const fallback = await callAI<AnalyzeResult>("analyze", ruleMessage);
+      result = fallback.result;
+      modelUsed = fallback.modelUsed;
+      tokensUsed = fallback.tokensUsed;
+      latencyMs = fallback.latencyMs;
+    } else {
+      throw e;
+    }
+  }
+
+  const analysis = await persistAnalysis(rule.id, userId, "analyze", rule.query, result, modelUsed, tokensUsed, latencyMs);
   return { analysis, result };
 }
 
@@ -140,15 +167,40 @@ export async function postEnhanceAnalyzeRule(ruleId: string, userId: string, enh
 
   const originalQuery = rule.query;
   const ruleWithEnhancedQuery = { ...(rule as unknown as Record<string, unknown>), query: enhancedQuery };
-  const userMessage = `This is a POST-ENHANCEMENT analysis. Compare the original query against the enhanced query and evaluate the improvements.
+  const postEnhanceMessage = `This is a POST-ENHANCEMENT analysis. Compare the original query against the enhanced query and evaluate the improvements.
 
 ${buildRuleMessage(ruleWithEnhancedQuery, rule.mitreMappings)}
 
 Original Query (before enhancement):
 ${originalQuery}`;
 
-  const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
-  const analysis = await persistAnalysis(rule.id, userId, "post_enhance", enhancedQuery, result, modelUsed, tokensUsed, latencyMs);
+  let result: AnalyzeResult;
+  let modelUsed: string;
+  let tokensUsed: number;
+  let latencyMs: number;
 
+  try {
+    const engineResult = await engineAnalyze({
+      user_id: userId,
+      rule_text: postEnhanceMessage,
+      rule_id: ruleId,
+    });
+    result = engineResult.result;
+    modelUsed = engineResult.modelUsed;
+    tokensUsed = engineResult.tokensUsed;
+    latencyMs = engineResult.latencyMs;
+  } catch (e) {
+    if (e instanceof EngineUnavailableError) {
+      const fallback = await callAI<AnalyzeResult>("analyze", postEnhanceMessage);
+      result = fallback.result;
+      modelUsed = fallback.modelUsed;
+      tokensUsed = fallback.tokensUsed;
+      latencyMs = fallback.latencyMs;
+    } else {
+      throw e;
+    }
+  }
+
+  const analysis = await persistAnalysis(rule.id, userId, "post_enhance", enhancedQuery, result, modelUsed, tokensUsed, latencyMs);
   return { analysis, result };
 }

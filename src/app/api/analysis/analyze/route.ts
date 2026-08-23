@@ -5,6 +5,7 @@ import { rateLimit } from "@/lib/middleware";
 import { analyzeSchema, validateRequest } from "@/lib/validation";
 import { callAI, type AnalyzeResult } from "@/lib/ai";
 import { analyzeRule, postEnhanceAnalyzeRule } from "@/lib/analyze-rule";
+import { engineAnalyze, EngineUnavailableError } from "@/lib/engine-client";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { aiErrorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
@@ -87,9 +88,36 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       }
 
       // Only the ad-hoc query path (no ruleId) is left inline.
-      const userMessage = `Detection Query (${validated.data.language || "kuery"}, ${validated.data.ruleType || "query"}):\n${validated.data.query}`;
+      const queryText = validated.data.query || "";
+      const queryLanguage = validated.data.language || "kuery";
+      const userMessage = `Detection Query (${queryLanguage}, ${validated.data.ruleType || "query"}):\n${queryText}`;
 
-      const { result, modelUsed, tokensUsed, latencyMs } = await callAI<AnalyzeResult>("analyze", userMessage);
+      let result: AnalyzeResult;
+      let modelUsed: string;
+      let tokensUsed: number;
+      let latencyMs: number;
+
+      try {
+        const engineResult = await engineAnalyze({
+          user_id: request.user.id,
+          query: queryText,
+          language: queryLanguage,
+        });
+        result = engineResult.result;
+        modelUsed = engineResult.modelUsed;
+        tokensUsed = engineResult.tokensUsed;
+        latencyMs = engineResult.latencyMs;
+      } catch (e) {
+        if (e instanceof EngineUnavailableError) {
+          const fallback = await callAI<AnalyzeResult>("analyze", userMessage);
+          result = fallback.result;
+          modelUsed = fallback.modelUsed;
+          tokensUsed = fallback.tokensUsed;
+          latencyMs = fallback.latencyMs;
+        } else {
+          throw e;
+        }
+      }
 
       const analysis = await prisma.analysis.create({
         data: {

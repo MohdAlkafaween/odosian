@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
 import { AIError } from "./ai";
+import {
+  EngineValidationError,
+  EngineAuthError,
+  EngineRateLimitError,
+} from "./engine-client";
 
 export function errorResponse(message: string, status: number): NextResponse {
   return NextResponse.json({ error: message }, { status });
@@ -46,6 +51,23 @@ export class SyncConflictError extends HttpError {
 }
 
 export function aiErrorResponse(e: unknown, fallbackMessage: string): NextResponse {
+  if (e instanceof EngineValidationError) {
+    return NextResponse.json(
+      {
+        error: e.message,
+        category: e.category,
+        issues: e.issues,
+        validationRejection: true,
+      },
+      { status: 422 },
+    );
+  }
+  if (e instanceof EngineAuthError) {
+    return errorResponse(e.message, 401);
+  }
+  if (e instanceof EngineRateLimitError) {
+    return errorResponse(e.message, 429);
+  }
   if (e instanceof AIError) {
     const status =
       e.statusCode === 429 ? 429 :

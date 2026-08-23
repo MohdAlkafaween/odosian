@@ -14,6 +14,7 @@ import { useToastStore } from "@/stores/toast";
 import { useThemeStore, THEMES, type ThemeId } from "@/stores/theme";
 import { WebhooksTab } from "./webhooks-tab";
 import { CustomFieldsTab } from "./custom-fields-tab";
+import { AIDiagnosticsCard } from "@/components/settings/ai-diagnostics";
 
 interface Setting {
   id: string;
@@ -702,6 +703,9 @@ export default function SettingsPage() {
                     ))}
                   </CardBody>
                 </Card>
+
+                {/* AI System Diagnostics */}
+                <AIDiagnosticsCard />
 
               </div>
             )}
