@@ -1,10 +1,11 @@
 "use client";
 
-import { useTabStore, type AITab, type TabType, type SimulateResult, isPageTabType } from "@/stores/tabs";
+import { useTabStore, type AITab, type TabType, type SimulateResult, type PipelineRunState, isPageTabType } from "@/stores/tabs";
 import { RuleDetailView } from "@/components/rule-detail-view";
 import { MitreView } from "@/components/mitre-view";
 import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 import { cancelTab } from "@/lib/tab-controllers";
+import { startEnginePipeline, runDirectFallback, type PipelineWriter } from "@/lib/engine-pipeline";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
@@ -15,7 +16,7 @@ import { AILoading } from "@/components/ui/ai-loading";
 import { Button } from "@/components/ui/button";
 import { BatchProgress } from "@/components/batch-progress";
 import { useToastStore } from "@/stores/toast";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import type { AnalyzeResult, EnhanceResult, GenerateResult } from "@/lib/ai";
 
 const TYPE_LABELS: Record<string, string> = {
@@ -167,45 +168,7 @@ export function AITabContent() {
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && (activeTab.type === "analyze" || activeTab.type === "enhance" || activeTab.type === "generate") && (
-          <PipelineProgress
-            tabId={activeTab.id}
-            endpoint="/api/analysis/stream"
-            body={{
-              operation: activeTab.type,
-              ruleId: activeTab.ruleId,
-            }}
-            onComplete={(result) => {
-              const data = result as Record<string, unknown>;
-              const analysis = data.analysis || data;
-              updateTab(activeTab.id, { status: "completed", result: analysis as AnalyzeResult });
-            }}
-            onError={async (error, validationRejection) => {
-              if (validationRejection) {
-                updateTab(activeTab.id, { status: "failed", error, validationRejection });
-                return;
-              }
-              if (error.includes("unavailable") || error.includes("fallback")) {
-                updateTab(activeTab.id, { useEngine: false, statusMessage: "Using direct AI provider..." });
-                const endpoint = activeTab.type === "enhance" ? "/api/analysis/enhance" : activeTab.type === "generate" ? "/api/analysis/generate" : "/api/analysis/analyze";
-                const body: Record<string, unknown> = {};
-                if (activeTab.ruleId) body.ruleId = activeTab.ruleId;
-                try {
-                  const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-                  const data = await res.json();
-                  if (res.ok) {
-                    updateTab(activeTab.id, { status: "completed", result: data.analysis });
-                  } else {
-                    updateTab(activeTab.id, { status: "failed", error: data.error || "Failed" });
-                  }
-                } catch (err) {
-                  const msg = err instanceof Error ? err.message : "Unknown error";
-                  updateTab(activeTab.id, { status: "failed", error: `Fallback failed: ${msg}` });
-                }
-              } else {
-                updateTab(activeTab.id, { status: "failed", error });
-              }
-            }}
-          />
+          <PipelineProgress stageProgress={activeTab.stageProgress} startedAt={activeTab.pipelineStartedAt} />
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "running" && !activeTab.useEngine && (
@@ -305,7 +268,7 @@ export function AITabContent() {
               <TabAnalyzeResults result={activeTab.result as AnalyzeResult} ruleId={activeTab.ruleId} />
             )}
             {activeTab.type === "enhance" && (
-              <TabEnhanceResults result={activeTab.result as EnhanceResult & { inputQuery?: string }} ruleId={activeTab.ruleId} />
+              <TabEnhanceResults result={activeTab.result as EnhanceResult & { inputQuery?: string }} ruleId={activeTab.ruleId} tabId={activeTab.id} postEnhance={activeTab.postEnhance} />
             )}
             {activeTab.type === "generate" && (
               <TabGenerateResults result={activeTab.result as GenerateResult} />
@@ -510,13 +473,20 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
   const handleEnhance = () => {
     if (!ruleId) return;
     setEnhancing(true);
-    addTab({
+    const tabId = addTab({
       type: "enhance",
       title: "Enhancement",
       ruleId,
       status: "running",
       statusMessage: "AI is enhancing the rule...",
       useEngine: true,
+    });
+    startEnginePipeline({
+      runId: tabId,
+      endpoint: "/api/analysis/stream",
+      body: { operation: "enhance", ruleId },
+      write: (patch) => updateTab(tabId, patch),
+      onFallback: () => runDirectFallback({ type: "enhance", ruleId, write: (patch) => updateTab(tabId, patch) }),
     });
     setEnhancing(false);
   };
@@ -649,12 +619,38 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
   );
 }
 
-function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { inputQuery?: string }; ruleId?: string }) {
+function TabEnhanceResults({ result, ruleId, tabId, postEnhance }: { result: EnhanceResult & { inputQuery?: string }; ruleId?: string; tabId: string; postEnhance?: PipelineRunState }) {
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
-  const [analyzingPost, setAnalyzingPost] = useState(false);
-  const [postAnalysisResult, setPostAnalysisResult] = useState<AnalyzeResult | null>(null);
   const { addToast } = useToastStore();
+  const { updateTab } = useTabStore();
+
+  const analyzingPost = postEnhance?.status === "running";
+  const postUseEngine = postEnhance?.useEngine ?? true;
+  const postAnalysisResult = postEnhance?.result ?? null;
+
+  const writePostEnhance: PipelineWriter = (patch) => {
+    const current = useTabStore.getState().getTab(tabId)?.postEnhance;
+    // postEnhance is always an "analyze" operation, so its result is always
+    // an AnalyzeResult — narrower than the broader union PipelineWriter's
+    // patch.result carries for the top-level analyze/enhance/generate tabs.
+    updateTab(tabId, { postEnhance: { status: "running", useEngine: true, ...current, ...patch, result: patch.result as AnalyzeResult | undefined ?? current?.result } });
+  };
+
+  // Fires the completion/failure toast exactly once per real transition,
+  // regardless of whether it came from the engine path or the direct-LLM
+  // fallback — both converge on the same postEnhance.status field.
+  const prevPostStatusRef = useRef(postEnhance?.status);
+  useEffect(() => {
+    if (prevPostStatusRef.current !== postEnhance?.status) {
+      if (postEnhance?.status === "completed" && postEnhance.result) {
+        addToast("success", `Post-enhancement score: ${postEnhance.result.score}/100`);
+      } else if (postEnhance?.status === "failed") {
+        addToast("error", postEnhance.validationRejection?.issues.join("; ") || postEnhance.error || "Post-enhancement analysis failed");
+      }
+      prevPostStatusRef.current = postEnhance?.status;
+    }
+  }, [postEnhance?.status, postEnhance?.result, postEnhance?.error, postEnhance?.validationRejection, addToast]);
 
   const handleApply = async () => {
     if (!ruleId) return;
@@ -689,9 +685,21 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
     }
   };
 
-  const handlePostEnhanceAnalysis = async () => {
+  const handlePostEnhanceAnalysis = () => {
     if (!ruleId) return;
-    setAnalyzingPost(true);
+    updateTab(tabId, { postEnhance: { status: "running", useEngine: true } });
+    startEnginePipeline({
+      runId: `${tabId}-post-enhance`,
+      endpoint: "/api/analysis/stream",
+      body: { operation: "analyze", ruleId, postEnhancement: true, query: result.enhancedQuery },
+      write: writePostEnhance,
+      onFallback: () => runPostEnhanceFallback(),
+    });
+  };
+
+  const runPostEnhanceFallback = async () => {
+    if (!ruleId) return;
+    writePostEnhance({ useEngine: false });
     try {
       const res = await fetch("/api/analysis/analyze", {
         method: "POST",
@@ -700,15 +708,12 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
       });
       const data = await res.json();
       if (res.ok) {
-        setPostAnalysisResult(data.analysis);
-        addToast("success", `Post-enhancement score: ${data.analysis.score}/100`);
+        writePostEnhance({ status: "completed", result: data.analysis });
       } else {
-        addToast("error", data.error || "Post-enhancement analysis failed");
+        writePostEnhance({ status: "failed", error: data.error || "Post-enhancement analysis failed" });
       }
     } catch {
-      addToast("error", "Post-enhancement analysis failed");
-    } finally {
-      setAnalyzingPost(false);
+      writePostEnhance({ status: "failed", error: "Post-enhancement analysis failed" });
     }
   };
 
@@ -732,6 +737,14 @@ function TabEnhanceResults({ result, ruleId }: { result: EnhanceResult & { input
           </div>
           <DeployToElasticControl ruleId={ruleId} disabledReason={applied ? undefined : "Apply the enhancement to the rule first"} />
         </div>
+      )}
+
+      {analyzingPost && ruleId && postUseEngine && (
+        <PipelineProgress stageProgress={postEnhance?.stageProgress} startedAt={postEnhance?.pipelineStartedAt} />
+      )}
+
+      {analyzingPost && ruleId && !postUseEngine && (
+        <AILoading operation="post_enhance" />
       )}
 
       {result.enhancedTitle && (

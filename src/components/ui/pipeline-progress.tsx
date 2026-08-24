@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import type { StageStatus } from "@/stores/tabs";
 
 interface PipelineStage {
   id: string;
@@ -99,54 +100,59 @@ const STAGES: PipelineStage[] = [
   },
 ];
 
-type StageStatus = "pending" | "active" | "completed";
-
 interface StageState {
   status: StageStatus;
 }
 
 const MIN_STAGE_VISIBLE_MS = 500;
+export const PIPELINE_STAGE_IDS: readonly string[] = STAGES.map((s) => s.id);
+const STAGE_ORDER = PIPELINE_STAGE_IDS;
 
-export function PipelineProgress({
-  tabId,
-  endpoint,
-  body,
-  onComplete,
-  onError,
-}: {
-  tabId: string;
-  endpoint: string;
-  body: Record<string, unknown>;
-  onComplete: (result: unknown) => void;
-  onError: (error: string, validationRejection?: { category: string; issues: string[]; structuredIssues?: { code: string; severity: string; category: string; path: string; message: string }[] }) => void;
-}) {
-  const [stages, setStages] = useState<Record<string, StageState>>(() => {
-    const initial: Record<string, StageState> = {};
-    STAGES.forEach((s) => {
-      initial[s.id] = { status: "pending" };
-    });
-    return initial;
+function toDisplayState(progress: Record<string, StageStatus> | undefined): Record<string, StageState> {
+  const next: Record<string, StageState> = {};
+  STAGE_ORDER.forEach((id) => {
+    next[id] = { status: progress?.[id] ?? "pending" };
   });
-  const [elapsed, setElapsed] = useState(0);
-  const startRef = useRef(Date.now());
-  const abortRef = useRef<AbortController | null>(null);
-  const bodyRef = useRef(body);
-  const onCompleteRef = useRef(onComplete);
-  const onErrorRef = useRef(onError);
-  onCompleteRef.current = onComplete;
-  onErrorRef.current = onError;
+  return next;
+}
 
-  const stageQueueRef = useRef<{ type: "stage"; stage: string }[]>([]);
+// The run this displays lives in src/lib/engine-pipeline.ts, entirely
+// outside this component's lifecycle — it keeps going, and keeps writing
+// stageProgress into the tab store, whether or not this is mounted to watch
+// it. That's what makes switching tabs and back show real progress instead
+// of restarting the run. This component only ever reads and displays;
+// mounting or unmounting it never starts or stops anything.
+//
+// The one thing it still owns locally is the staggered reveal (each stage
+// stays visibly "active" for at least MIN_STAGE_VISIBLE_MS) — a purely
+// cosmetic smoothing pass over transitions observed while mounted. On first
+// mount it snaps straight to the true current state instead of replaying
+// a catch-up animation for stages that finished while nobody was looking.
+export function PipelineProgress({
+  stageProgress,
+  startedAt,
+}: {
+  stageProgress: Record<string, StageStatus> | undefined;
+  startedAt: number | undefined;
+}) {
+  const [stages, setStages] = useState<Record<string, StageState>>(() => toDisplayState(stageProgress));
+  const [elapsed, setElapsed] = useState(0);
+  const [startTime] = useState(() => startedAt ?? Date.now());
+
+  const stageQueueRef = useRef<string[]>([]);
   const drainRunningRef = useRef(false);
   const lastVisualUpdateRef = useRef(0);
+  const lastSeenActiveRef = useRef<string | undefined>(
+    STAGE_ORDER.find((id) => stageProgress?.[id] === "active"),
+  );
 
   const drainQueue = useRef(() => {
     if (drainRunningRef.current) return;
     drainRunningRef.current = true;
 
     const processNext = () => {
-      const item = stageQueueRef.current.shift();
-      if (!item) {
+      const stageId = stageQueueRef.current.shift();
+      if (!stageId) {
         drainRunningRef.current = false;
         return;
       }
@@ -160,13 +166,9 @@ export function PipelineProgress({
         setStages((prev) => {
           const next = { ...prev };
           Object.keys(next).forEach((k) => {
-            if (next[k].status === "active") {
-              next[k] = { status: "completed" };
-            }
+            if (next[k].status === "active") next[k] = { status: "completed" };
           });
-          if (next[item.stage]) {
-            next[item.stage] = { status: "active" };
-          }
+          if (next[stageId]) next[stageId] = { status: "active" };
           return next;
         });
         processNext();
@@ -178,108 +180,31 @@ export function PipelineProgress({
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - startRef.current) / 1000));
+      setElapsed(Math.floor((Date.now() - startTime) / 1000));
     }, 100);
     return () => clearInterval(timer);
-  }, []);
+  }, [startTime]);
 
+  // Reacts to the true, store-held progress advancing — queues each newly
+  // active stage through the same staggered reveal a live SSE event used to
+  // drive directly. If every stage is already completed (a result landed,
+  // possibly while this was unmounted), snaps straight there.
   useEffect(() => {
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    (async () => {
-      try {
-        const res = await fetch(endpoint, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-          },
-          body: JSON.stringify(bodyRef.current),
-          signal: controller.signal,
-        });
-
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
-          if (res.status === 422 && data.validationRejection) {
-            onErrorRef.current(data.error || "Quality check failed", { category: data.category, issues: data.issues || [], structuredIssues: data.structuredIssues || [] });
-          } else {
-            onErrorRef.current(data.error || `Server error ${res.status}`);
-          }
-          return;
-        }
-
-        const reader = res.body?.getReader();
-        if (!reader) {
-          onErrorRef.current("No response stream");
-          return;
-        }
-
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split("\n");
-          buffer = lines.pop() || "";
-
-          let eventType = "";
-          let eventData = "";
-
-          for (const line of lines) {
-            if (line.startsWith("event: ")) {
-              eventType = line.slice(7).trim();
-            } else if (line.startsWith("data: ")) {
-              eventData = line.slice(6).trim();
-            } else if (line === "" && eventType && eventData) {
-              try {
-                const parsed = JSON.parse(eventData);
-                if (eventType === "stage") {
-                  stageQueueRef.current.push({ type: "stage", stage: parsed.stage });
-                  drainQueue();
-                } else if (eventType === "result") {
-                  const waitForDrain = () => {
-                    if (stageQueueRef.current.length > 0 || drainRunningRef.current) {
-                      setTimeout(waitForDrain, 100);
-                      return;
-                    }
-                    setStages((prev) => {
-                      const next = { ...prev };
-                      Object.keys(next).forEach((k) => {
-                        next[k] = { status: "completed" };
-                      });
-                      return next;
-                    });
-                    setTimeout(() => onCompleteRef.current(parsed), 300);
-                  };
-                  waitForDrain();
-                } else if (eventType === "error") {
-                  if (parsed.category === "validation" || parsed.category?.includes("validation")) {
-                    onErrorRef.current(parsed.error || "Quality check failed", { category: parsed.category, issues: parsed.issues || [], structuredIssues: parsed.structured_issues || [] });
-                  } else {
-                    onErrorRef.current(parsed.error || "Pipeline error");
-                  }
-                }
-              } catch {
-                // skip malformed events
-              }
-              eventType = "";
-              eventData = "";
-            }
-          }
-        }
-      } catch (e) {
-        if (e instanceof DOMException && e.name === "AbortError") return;
-        onErrorRef.current("Lost connection to engine");
-      }
-    })();
-
-    return () => controller.abort();
+    const allDone = STAGE_ORDER.length > 0 && STAGE_ORDER.every((id) => stageProgress?.[id] === "completed");
+    if (allDone) {
+      stageQueueRef.current = [];
+      const snapshot = stageProgress;
+      setTimeout(() => setStages(toDisplayState(snapshot)), 0);
+      return;
+    }
+    const currentlyActive = STAGE_ORDER.find((id) => stageProgress?.[id] === "active");
+    if (currentlyActive && currentlyActive !== lastSeenActiveRef.current) {
+      lastSeenActiveRef.current = currentlyActive;
+      stageQueueRef.current.push(currentlyActive);
+      drainQueue();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, tabId]);
+  }, [stageProgress]);
 
   const completedCount = Object.values(stages).filter((s) => s.status === "completed").length;
   const progressPct = Math.round((completedCount / STAGES.length) * 100);

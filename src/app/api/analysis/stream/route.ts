@@ -14,12 +14,13 @@ const AI_RATE_LIMIT = parseInt(process.env.RATE_LIMIT_AI || "10");
 export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
   requireRole("DETECTION_ENG", "ADMIN")(async (request: AuthenticatedRequest, _context) => {
     const body = await request.json();
-    const { operation, ruleId, query, language, requirement } = body as {
+    const { operation, ruleId, query, language, requirement, postEnhancement } = body as {
       operation: "analyze" | "enhance" | "generate";
       ruleId?: string;
       query?: string;
       language?: string;
       requirement?: string;
+      postEnhancement?: boolean;
     };
 
     try {
@@ -41,8 +42,13 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
             { status: 404, headers: { "Content-Type": "application/json" } },
           );
         }
+        // Post-enhancement analysis compares the not-yet-applied enhanced
+        // query against the rule as it's currently stored, so the query the
+        // engine sees has to be the enhanced one, not the persisted one.
+        const isPostEnhancement = operation === "analyze" && postEnhancement && !!query;
+        const ruleForAnalysis = isPostEnhancement ? { ...rule, query } : rule;
         const ruleJson = buildRuleJson(
-          rule as unknown as Record<string, unknown>,
+          ruleForAnalysis as unknown as Record<string, unknown>,
           rule.mitreMappings,
         );
 

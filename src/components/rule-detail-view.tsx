@@ -17,6 +17,7 @@ import { CommentsSection } from "@/components/comments-section";
 import type { SyncFieldDiff } from "@/lib/errors";
 import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 import { registerTabController, clearTabController } from "@/lib/tab-controllers";
+import { startEnginePipeline, runDirectFallback } from "@/lib/engine-pipeline";
 
 interface RuleDetail {
   id: string;
@@ -287,7 +288,7 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
   const handleAnalyzeDirect = async () => {
     if (!rule) return;
     const label = rule.aiFlags?.enhanced ? "Post Analysis" : "Analyze";
-    addTab({
+    const tabId = addTab({
       type: "analyze",
       title: `${label}: ${rule.title}`,
       ruleId: rule.id,
@@ -296,11 +297,18 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       statusMessage: "AI is analyzing...",
       useEngine: true,
     });
+    startEnginePipeline({
+      runId: tabId,
+      endpoint: "/api/analysis/stream",
+      body: { operation: "analyze", ruleId: rule.id },
+      write: (patch) => updateTab(tabId, patch),
+      onFallback: () => runDirectFallback({ type: "analyze", ruleId: rule.id, write: (patch) => updateTab(tabId, patch) }),
+    });
   };
 
   const handleEnhanceDirect = async () => {
     if (!rule) return;
-    addTab({
+    const tabId = addTab({
       type: "enhance",
       title: `Enhance: ${rule.title}`,
       ruleId: rule.id,
@@ -308,6 +316,13 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
       status: "running",
       statusMessage: "Enhancing rule...",
       useEngine: true,
+    });
+    startEnginePipeline({
+      runId: tabId,
+      endpoint: "/api/analysis/stream",
+      body: { operation: "enhance", ruleId: rule.id },
+      write: (patch) => updateTab(tabId, patch),
+      onFallback: () => runDirectFallback({ type: "enhance", ruleId: rule.id, write: (patch) => updateTab(tabId, patch) }),
     });
   };
 

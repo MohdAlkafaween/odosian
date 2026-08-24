@@ -23,6 +23,28 @@ export interface SimulateResult {
   cleanupCommands: string[];
 }
 
+export type StageStatus = "pending" | "active" | "completed";
+export type ValidationRejection = { category: string; issues: string[]; structuredIssues?: { code: string; severity: string; category: string; path: string; message: string }[] };
+
+// An engine-driven (SSE) run's live per-stage progress, kept on the tab
+// record itself rather than in the component that happens to be rendering
+// it. The component watching a run and the run itself are different
+// lifetimes — a tab only renders while it's the active one, but the
+// underlying request (started by src/lib/engine-pipeline.ts) keeps going
+// regardless of which tab is on screen. Reading progress from here instead
+// of local component state is what lets switching back to a tab show real
+// progress instead of restarting from scratch.
+export interface PipelineRunState {
+  status: TabStatus;
+  useEngine: boolean;
+  statusMessage?: string;
+  result?: AnalyzeResult;
+  error?: string;
+  validationRejection?: ValidationRejection;
+  stageProgress?: Record<string, StageStatus>;
+  pipelineStartedAt?: number;
+}
+
 export interface AITab {
   id: string;
   type: TabType;
@@ -34,8 +56,14 @@ export interface AITab {
   statusMessage?: string;
   result?: AnalyzeResult | (EnhanceResult & { inputQuery?: string }) | GenerateResult | SimulateResult;
   error?: string;
-  validationRejection?: { category: string; issues: string[]; structuredIssues?: { code: string; severity: string; category: string; path: string; message: string }[] };
+  validationRejection?: ValidationRejection;
   useEngine?: boolean;
+  stageProgress?: Record<string, StageStatus>;
+  pipelineStartedAt?: number;
+  // Post-enhancement analysis runs inline inside an already-completed
+  // enhance tab rather than opening a tab of its own — this is its state,
+  // surviving the same way the tab's own does.
+  postEnhance?: PipelineRunState;
   createdAt: number;
 }
 
@@ -123,11 +151,14 @@ export const useTabStore = create<TabState>()(
       // on a promise that will never resolve.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        state.tabs = state.tabs.map((t) =>
-          t.status === "running" && !isBatchType(t.type)
+        state.tabs = state.tabs.map((t) => {
+          const next = t.status === "running" && !isBatchType(t.type)
             ? { ...t, status: "failed" as const, error: "Lost connection to this run when the page reloaded — try again." }
-            : t
-        );
+            : t;
+          return next.postEnhance?.status === "running"
+            ? { ...next, postEnhance: { ...next.postEnhance, status: "failed" as const, error: "Lost connection to this run when the page reloaded — try again." } }
+            : next;
+        });
       },
     }
   )
