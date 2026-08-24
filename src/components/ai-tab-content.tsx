@@ -62,7 +62,7 @@ function RetryButton({ tab }: { tab: AITab }) {
       if (res.ok) {
         updateTab(tab.id, { status: "completed", result: data.analysis });
       } else if (res.status === 422 && data.validationRejection) {
-        updateTab(tab.id, { status: "failed", error: data.error || "Quality check failed", validationRejection: { category: data.category, issues: data.issues || [] } });
+        updateTab(tab.id, { status: "failed", error: data.error || "Quality check failed", validationRejection: { category: data.category, issues: data.issues || [], structuredIssues: data.structuredIssues || [] } });
       } else {
         updateTab(tab.id, { status: "failed", error: data.error || "Retry failed" });
       }
@@ -243,17 +243,50 @@ export function AITabContent() {
                 </svg>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-warning mb-1">Quality Check Failed</p>
-                  <p className="text-sm text-text-secondary mb-3">
+                  <p className="text-sm text-text-secondary mb-2">
                     The AI engine rejected this result because it couldn&apos;t verify all claims against its knowledge base.
                     This happens in about 1 in 11 requests. Click Retry to try again.
                   </p>
-                  {activeTab.validationRejection.issues.length > 0 && (
+                  {activeTab.validationRejection.category && (
+                    <p className="text-xs text-text-muted mb-2">
+                      Stage: <span className="font-mono text-warning/80">{activeTab.validationRejection.category}</span>
+                    </p>
+                  )}
+                  {activeTab.validationRejection.structuredIssues && activeTab.validationRejection.structuredIssues.length > 0 ? (
+                    <div className="space-y-2 mb-3">
+                      {Object.entries(
+                        activeTab.validationRejection.structuredIssues.reduce<Record<string, typeof activeTab.validationRejection.structuredIssues>>((groups, issue) => {
+                          const cat = issue!.category;
+                          if (!groups[cat]) groups[cat] = [];
+                          groups[cat].push(issue);
+                          return groups;
+                        }, {})
+                      ).map(([category, groupIssues]) => (
+                        <div key={category} className="rounded bg-card/50 border border-border/50 p-2">
+                          <p className="text-xs font-semibold text-text-secondary mb-1 uppercase tracking-wider">{category.replace(/_/g, " ")}</p>
+                          <ul className="text-xs text-text-muted space-y-1">
+                            {groupIssues!.map((issue, i) => (
+                              <li key={i} className="flex items-start gap-2">
+                                <span className={`shrink-0 mt-0.5 w-1.5 h-1.5 rounded-full ${issue!.severity === "error" ? "bg-danger" : "bg-warning"}`} />
+                                <span>
+                                  <span className="font-mono text-text-secondary">{issue!.path}</span>
+                                  {": "}
+                                  {issue!.message}
+                                  <span className="ml-1 text-text-muted/60 font-mono">({issue!.code})</span>
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  ) : activeTab.validationRejection.issues.length > 0 ? (
                     <ul className="text-xs text-text-muted space-y-1 mb-3 list-disc list-inside">
                       {activeTab.validationRejection.issues.map((issue, i) => (
                         <li key={i}>{issue}</li>
                       ))}
                     </ul>
-                  )}
+                  ) : null}
                   <RetryButton tab={activeTab} />
                 </div>
               </div>

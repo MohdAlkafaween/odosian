@@ -116,7 +116,7 @@ export function PipelineProgress({
   endpoint: string;
   body: Record<string, unknown>;
   onComplete: (result: unknown) => void;
-  onError: (error: string, validationRejection?: { category: string; issues: string[] }) => void;
+  onError: (error: string, validationRejection?: { category: string; issues: string[]; structuredIssues?: { code: string; severity: string; category: string; path: string; message: string }[] }) => void;
 }) {
   const [stages, setStages] = useState<Record<string, StageState>>(() => {
     const initial: Record<string, StageState> = {};
@@ -160,7 +160,7 @@ export function PipelineProgress({
         if (!res.ok) {
           const data = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
           if (res.status === 422 && data.validationRejection) {
-            onErrorRef.current(data.error || "Quality check failed", { category: data.category, issues: data.issues || [] });
+            onErrorRef.current(data.error || "Quality check failed", { category: data.category, issues: data.issues || [], structuredIssues: data.structuredIssues || [] });
           } else {
             onErrorRef.current(data.error || `Server error ${res.status}`);
           }
@@ -219,7 +219,7 @@ export function PipelineProgress({
                   setTimeout(() => onCompleteRef.current(parsed), 300);
                 } else if (eventType === "error") {
                   if (parsed.category === "validation" || parsed.category?.includes("validation")) {
-                    onErrorRef.current(parsed.error || "Quality check failed", { category: parsed.category, issues: parsed.issues || [] });
+                    onErrorRef.current(parsed.error || "Quality check failed", { category: parsed.category, issues: parsed.issues || [], structuredIssues: parsed.structured_issues || [] });
                   } else {
                     onErrorRef.current(parsed.error || "Pipeline error");
                   }

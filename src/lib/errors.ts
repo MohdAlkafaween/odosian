@@ -57,6 +57,7 @@ export function aiErrorResponse(e: unknown, fallbackMessage: string): NextRespon
         error: e.message,
         category: e.category,
         issues: e.issues,
+        structuredIssues: e.structuredIssues,
         validationRejection: true,
       },
       { status: 422 },

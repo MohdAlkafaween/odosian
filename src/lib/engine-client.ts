@@ -15,11 +15,20 @@ export class EngineUnavailableError extends Error {
   }
 }
 
+export interface StructuredIssue {
+  code: string;
+  severity: string;
+  category: string;
+  path: string;
+  message: string;
+}
+
 export class EngineValidationError extends Error {
   constructor(
     message: string,
     public readonly category: string,
     public readonly issues: string[],
+    public readonly structuredIssues: StructuredIssue[] = [],
   ) {
     super(message);
     this.name = "EngineValidationError";
@@ -56,6 +65,7 @@ interface EngineErrorBody {
   error: string;
   category: string;
   issues: string[];
+  structured_issues?: StructuredIssue[];
 }
 
 async function getProviderConfig(providerId?: string): Promise<ProviderConfig> {
@@ -135,6 +145,7 @@ async function callEngine<T>(
           errorBody.error,
           errorBody.category || "validation",
           errorBody.issues || [],
+          errorBody.structured_issues || [],
         );
       case 429:
         throw new EngineRateLimitError(errorBody.error);
