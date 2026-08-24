@@ -142,8 +142,23 @@ export function PipelineProgress({
   const stageQueueRef = useRef<string[]>([]);
   const drainRunningRef = useRef(false);
   const lastVisualUpdateRef = useRef(0);
-  const lastSeenActiveRef = useRef<string | undefined>(
-    STAGE_ORDER.find((id) => stageProgress?.[id] === "active"),
+  // Index into STAGE_ORDER of the furthest stage the local display has
+  // caught up to, so a jump of more than one stage between two observed
+  // prop values (React can batch several store writes into one render)
+  // replays every stage in between instead of silently skipping them —
+  // a skipped stage would otherwise never be marked "active" locally and
+  // so never get marked "completed" either, leaving it stuck at "pending"
+  // forever even though the run genuinely finished it.
+  const lastSeenIndexRef = useRef(
+    (() => {
+      const active = STAGE_ORDER.findIndex((id) => stageProgress?.[id] === "active");
+      if (active >= 0) return active;
+      let lastCompleted = -1;
+      STAGE_ORDER.forEach((id, i) => {
+        if (stageProgress?.[id] === "completed") lastCompleted = i;
+      });
+      return lastCompleted;
+    })(),
   );
 
   const drainQueue = useRef(() => {
@@ -197,10 +212,17 @@ export function PipelineProgress({
       setTimeout(() => setStages(toDisplayState(snapshot)), 0);
       return;
     }
-    const currentlyActive = STAGE_ORDER.find((id) => stageProgress?.[id] === "active");
-    if (currentlyActive && currentlyActive !== lastSeenActiveRef.current) {
-      lastSeenActiveRef.current = currentlyActive;
-      stageQueueRef.current.push(currentlyActive);
+    let trueIndex = STAGE_ORDER.findIndex((id) => stageProgress?.[id] === "active");
+    if (trueIndex < 0) {
+      STAGE_ORDER.forEach((id, i) => {
+        if (stageProgress?.[id] === "completed") trueIndex = i;
+      });
+    }
+    if (trueIndex > lastSeenIndexRef.current) {
+      for (let i = lastSeenIndexRef.current + 1; i <= trueIndex; i++) {
+        stageQueueRef.current.push(STAGE_ORDER[i]);
+      }
+      lastSeenIndexRef.current = trueIndex;
       drainQueue();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
