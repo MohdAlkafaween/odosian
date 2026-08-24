@@ -13,6 +13,7 @@ import { useToastStore } from "@/stores/toast";
 import { useTabStore } from "@/stores/tabs";
 import { VersionHistory } from "@/components/version-history";
 import { CommentsSection } from "@/components/comments-section";
+import { RuleHistory } from "@/components/rule-history";
 import type { SyncFieldDiff } from "@/lib/errors";
 import { useOpenPageTab } from "@/hooks/use-open-page-tab";
 import { registerTabController, clearTabController } from "@/lib/tab-controllers";
@@ -790,6 +791,15 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
           </CardBody>
         </Card>
       )}
+
+      {/* AI Analysis History */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-text">AI Analysis History</h2>
+          <span className="text-xs text-text-muted">{rule._count.analyses} record{rule._count.analyses !== 1 ? "s" : ""}</span>
+        </div>
+        <RuleHistory ruleId={rule.id} ruleLanguage={rule.language} ruleTitle={rule.title} />
+      </div>
 
       {/* Version History */}
       <div className="mt-8">
