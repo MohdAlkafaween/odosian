@@ -5,7 +5,7 @@ import { rateLimit } from "@/lib/middleware";
 import { analyzeSchema, validateRequest } from "@/lib/validation";
 import { callAI, type AnalyzeResult } from "@/lib/ai";
 import { analyzeRule, postEnhanceAnalyzeRule } from "@/lib/analyze-rule";
-import { engineAnalyze, EngineUnavailableError } from "@/lib/engine-client";
+import { engineAnalyze } from "@/lib/engine-client";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { aiErrorResponse } from "@/lib/errors";
 import { dispatchWebhookEvent } from "@/lib/webhook-dispatcher";
@@ -22,7 +22,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       // shares its whole create+persist path with the batch processor.
       const isPostEnhancement = !!(validated.data.postEnhancement && validated.data.query);
       if (validated.data.ruleId && !isPostEnhancement) {
-        const { analysis, result } = await analyzeRule(validated.data.ruleId, request.user.id);
+        const { analysis, result } = await analyzeRule(validated.data.ruleId, request.user.id, { skipEngine: validated.data.skipEngine });
 
         logAudit({
           userId: request.user.id,
@@ -56,7 +56,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       // Post-enhancement comparison of an existing rule also shares its
       // create+persist path with the batch processor.
       if (validated.data.ruleId && isPostEnhancement) {
-        const { analysis, result } = await postEnhanceAnalyzeRule(validated.data.ruleId, request.user.id, validated.data.query!);
+        const { analysis, result } = await postEnhanceAnalyzeRule(validated.data.ruleId, request.user.id, validated.data.query!, { skipEngine: validated.data.skipEngine });
 
         logAudit({
           userId: request.user.id,
@@ -98,6 +98,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       let latencyMs: number;
 
       try {
+        if (validated.data.skipEngine) throw new Error("skipEngine");
         const engineResult = await engineAnalyze({
           user_id: request.user.id,
           query: queryText,
@@ -107,16 +108,12 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
         modelUsed = engineResult.modelUsed;
         tokensUsed = engineResult.tokensUsed;
         latencyMs = engineResult.latencyMs;
-      } catch (e) {
-        if (e instanceof EngineUnavailableError) {
-          const fallback = await callAI<AnalyzeResult>("analyze", userMessage);
-          result = fallback.result;
-          modelUsed = fallback.modelUsed;
-          tokensUsed = fallback.tokensUsed;
-          latencyMs = fallback.latencyMs;
-        } else {
-          throw e;
-        }
+      } catch {
+        const fallback = await callAI<AnalyzeResult>("analyze", userMessage);
+        result = fallback.result;
+        modelUsed = fallback.modelUsed;
+        tokensUsed = fallback.tokensUsed;
+        latencyMs = fallback.latencyMs;
       }
 
       const analysis = await prisma.analysis.create({

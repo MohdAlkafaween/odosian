@@ -13,7 +13,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       const validated = await validateRequest(enhanceSchema, request);
       if ("error" in validated) return validated.error;
 
-      const { analysis, result } = await enhanceRule(validated.data.ruleId, request.user.id);
+      const { analysis, result } = await enhanceRule(validated.data.ruleId, request.user.id, { skipEngine: validated.data.skipEngine });
 
       logAudit({
         userId: request.user.id,

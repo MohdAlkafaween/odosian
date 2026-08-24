@@ -34,14 +34,28 @@ export function startEnginePipeline(opts: {
   endpoint: string;
   body: Record<string, unknown>;
   write: PipelineWriter;
-  // Called when the engine itself is unavailable (network/5xx, not a
-  // validation rejection) so the caller can fall back to a direct LLM call
-  // using whatever endpoint fits that operation.
+  // Called on any engine-side failure — connection loss, a timeout, a
+  // provider hiccup, or the engine's own validation rejecting the result —
+  // so the caller can fall back to a direct LLM call instead of surfacing
+  // the failure. This trades the engine's grounding/validation guarantees
+  // for always producing a result: a fallback result can contain something
+  // the engine would have caught and rejected. Not called for an explicit
+  // user cancellation — that stays a real "Cancelled", not a fallback.
   onFallback: () => void;
 }): void {
   const { runId, endpoint, body, write, onFallback } = opts;
   const controller = new AbortController();
   registerTabController(runId, controller);
+  // onFallback kicks off its own async request — guard against triggering
+  // it twice for the same run (e.g. a malformed-but-error-shaped event
+  // followed by the stream closing) and racing two direct-LLM calls
+  // against the same tab.
+  let fellBack = false;
+  const fallbackOnce = () => {
+    if (fellBack) return;
+    fellBack = true;
+    onFallback();
+  };
 
   const stageProgress = initialStageProgress();
   write({ stageProgress: { ...stageProgress }, pipelineStartedAt: Date.now() });
@@ -72,18 +86,13 @@ export function startEnginePipeline(opts: {
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({ error: `Server error ${res.status}` }));
-        if (res.status === 422 && data.validationRejection) {
-          write({ status: "failed", error: data.error || "Quality check failed", validationRejection: { category: data.category, issues: data.issues || [], structuredIssues: data.structuredIssues || [] } });
-        } else {
-          write({ status: "failed", error: data.error || `Server error ${res.status}` });
-        }
+        fallbackOnce();
         return;
       }
 
       const reader = res.body?.getReader();
       if (!reader) {
-        write({ status: "failed", error: "No response stream" });
+        fallbackOnce();
         return;
       }
 
@@ -120,16 +129,8 @@ export function startEnginePipeline(opts: {
                 const data = parsed as Record<string, unknown>;
                 write({ status: "completed", result: (data.analysis ?? data) as AITab["result"] });
               } else if (eventType === "error") {
-                if (parsed.category === "validation" || parsed.category?.includes("validation")) {
-                  write({ status: "failed", error: parsed.error || "Quality check failed", validationRejection: { category: parsed.category, issues: parsed.issues || [], structuredIssues: parsed.structured_issues || [] } });
-                } else {
-                  const msg = parsed.error || "Pipeline error";
-                  if (msg.includes("unavailable") || msg.includes("fallback")) {
-                    onFallback();
-                  } else {
-                    write({ status: "failed", error: msg });
-                  }
-                }
+                fallbackOnce();
+                return;
               }
             } catch {
               // skip malformed events
@@ -144,7 +145,7 @@ export function startEnginePipeline(opts: {
         write({ status: "failed", error: "Cancelled" });
         return;
       }
-      write({ status: "failed", error: "Lost connection to engine" });
+      fallbackOnce();
     } finally {
       clearTabController(runId);
     }
@@ -163,7 +164,10 @@ export async function runDirectFallback(opts: {
   const { type, ruleId, write } = opts;
   write({ useEngine: false, statusMessage: "Using direct AI provider..." });
   const endpoint = type === "enhance" ? "/api/analysis/enhance" : type === "generate" ? "/api/analysis/generate" : "/api/analysis/analyze";
-  const body: Record<string, unknown> = {};
+  // The engine was already tried and gave up on this same run — skip the
+  // route's own internal engine-first attempt so a hang doesn't cost a
+  // second full timeout before this fallback actually lands.
+  const body: Record<string, unknown> = { skipEngine: true };
   if (ruleId) body.ruleId = ruleId;
   try {
     const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

@@ -110,17 +110,25 @@ export const analyzeSchema = z.object({
   language: z.string().optional(),
   ruleType: z.string().optional(),
   postEnhancement: z.boolean().optional(),
+  // Set by the client's own engine-fallback path, which already tried and
+  // gave up on the engine — without this, this route would retry the
+  // engine a second time before reaching the direct call, which for a
+  // hang (not a fast error) doubles the wait instead of actually falling
+  // back promptly.
+  skipEngine: z.boolean().optional(),
 }).refine((data) => data.ruleId || data.query, {
   message: "Either ruleId or query is required",
 });
 
 export const enhanceSchema = z.object({
   ruleId: z.string().uuid(),
+  skipEngine: z.boolean().optional(),
 });
 
 export const generateSchema = z.object({
   description: z.string().min(10, "Description must be at least 10 characters").max(5000),
   saveAsRule: z.boolean().default(false),
+  skipEngine: z.boolean().optional(),
 });
 
 export const feedbackSchema = z.object({

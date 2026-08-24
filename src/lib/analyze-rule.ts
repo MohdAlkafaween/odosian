@@ -1,6 +1,6 @@
 import { prisma } from "./prisma";
 import { callAI, type AnalyzeResult } from "./ai";
-import { engineAnalyze, EngineUnavailableError } from "./engine-client";
+import { engineAnalyze } from "./engine-client";
 import { maybeAdvanceRuleStatus } from "./rule-status";
 
 interface MitreRow {
@@ -164,7 +164,8 @@ async function persistAnalysis(
 // Runs a full "analyze" pass against an existing rule and persists the
 // Analysis row + MITRE mappings. Shared by the single-rule analyze route and
 // the batch processor so both stay in sync.
-export async function analyzeRule(ruleId: string, userId: string) {
+export async function analyzeRule(ruleId: string, userId: string, opts: { skipEngine?: boolean } = {}) {
+  const { skipEngine = false } = opts;
   const rule = await prisma.rule.findUnique({
     where: { id: ruleId },
     include: { mitreMappings: true },
@@ -181,6 +182,7 @@ export async function analyzeRule(ruleId: string, userId: string) {
   let latencyMs: number;
 
   try {
+    if (skipEngine) throw new Error("skipEngine");
     const engineResult = await engineAnalyze({
       user_id: userId,
       rule_text: ruleJson,
@@ -190,16 +192,16 @@ export async function analyzeRule(ruleId: string, userId: string) {
     modelUsed = engineResult.modelUsed;
     tokensUsed = engineResult.tokensUsed;
     latencyMs = engineResult.latencyMs;
-  } catch (e) {
-    if (e instanceof EngineUnavailableError) {
-      const fallback = await callAI<AnalyzeResult>("analyze", ruleMessage);
-      result = fallback.result;
-      modelUsed = fallback.modelUsed;
-      tokensUsed = fallback.tokensUsed;
-      latencyMs = fallback.latencyMs;
-    } else {
-      throw e;
-    }
+  } catch {
+    // Any engine-side failure — connection loss, a timeout, or the engine's
+    // own validation rejecting the result — falls back to a direct call
+    // rather than surfacing the failure. Trades the engine's grounding for
+    // reliably producing a result every time.
+    const fallback = await callAI<AnalyzeResult>("analyze", ruleMessage);
+    result = fallback.result;
+    modelUsed = fallback.modelUsed;
+    tokensUsed = fallback.tokensUsed;
+    latencyMs = fallback.latencyMs;
   }
 
   const analysis = await persistAnalysis(rule.id, userId, "analyze", rule.query, result, modelUsed, tokensUsed, latencyMs);
@@ -209,7 +211,8 @@ export async function analyzeRule(ruleId: string, userId: string) {
 // Compares a rule's original query against an already-enhanced one and
 // scores the improvement. Shared by the single-rule "Analyze After
 // Enhancement" action and the batch equivalent.
-export async function postEnhanceAnalyzeRule(ruleId: string, userId: string, enhancedQuery: string) {
+export async function postEnhanceAnalyzeRule(ruleId: string, userId: string, enhancedQuery: string, opts: { skipEngine?: boolean } = {}) {
+  const { skipEngine = false } = opts;
   const rule = await prisma.rule.findUnique({
     where: { id: ruleId },
     include: { mitreMappings: true },
@@ -232,6 +235,7 @@ ${originalQuery}`;
   let latencyMs: number;
 
   try {
+    if (skipEngine) throw new Error("skipEngine");
     const engineResult = await engineAnalyze({
       user_id: userId,
       rule_text: ruleJson,
@@ -241,16 +245,12 @@ ${originalQuery}`;
     modelUsed = engineResult.modelUsed;
     tokensUsed = engineResult.tokensUsed;
     latencyMs = engineResult.latencyMs;
-  } catch (e) {
-    if (e instanceof EngineUnavailableError) {
-      const fallback = await callAI<AnalyzeResult>("analyze", postEnhanceMessage);
-      result = fallback.result;
-      modelUsed = fallback.modelUsed;
-      tokensUsed = fallback.tokensUsed;
-      latencyMs = fallback.latencyMs;
-    } else {
-      throw e;
-    }
+  } catch {
+    const fallback = await callAI<AnalyzeResult>("analyze", postEnhanceMessage);
+    result = fallback.result;
+    modelUsed = fallback.modelUsed;
+    tokensUsed = fallback.tokensUsed;
+    latencyMs = fallback.latencyMs;
   }
 
   const analysis = await persistAnalysis(rule.id, userId, "post_enhance", enhancedQuery, result, modelUsed, tokensUsed, latencyMs);

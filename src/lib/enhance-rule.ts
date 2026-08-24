@@ -1,14 +1,15 @@
 import { prisma } from "./prisma";
 import { callAI, type EnhanceResult } from "./ai";
 import { analyzeRule, buildRuleJson } from "./analyze-rule";
-import { engineEnhance, EngineUnavailableError } from "./engine-client";
+import { engineEnhance } from "./engine-client";
 import { maybeAdvanceRuleStatus } from "./rule-status";
 
 // Mirrors the single-rule enhance route, but auto-runs an analysis first
 // when the rule hasn't been analyzed yet instead of asking the caller to
 // retry — the old two-step client-side fallback (see ai-tab-content.tsx)
 // only worked for one rule at a time and can't drive a batch.
-export async function enhanceRule(ruleId: string, userId: string) {
+export async function enhanceRule(ruleId: string, userId: string, opts: { skipEngine?: boolean } = {}) {
+  const { skipEngine = false } = opts;
   const rule = await prisma.rule.findUnique({
     where: { id: ruleId },
     include: { mitreMappings: true },
@@ -21,7 +22,7 @@ export async function enhanceRule(ruleId: string, userId: string) {
   });
 
   if (!latestAnalysis) {
-    await analyzeRule(ruleId, userId);
+    await analyzeRule(ruleId, userId, { skipEngine });
     latestAnalysis = await prisma.analysis.findFirst({
       where: { ruleId: rule.id, analysisType: "analyze" },
       orderBy: { createdAt: "desc" },
@@ -96,6 +97,7 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
   let latencyMs: number;
 
   try {
+    if (skipEngine) throw new Error("skipEngine");
     const ruleJson = buildRuleJson(rule as unknown as Record<string, unknown>, rule.mitreMappings);
     const engineResult = await engineEnhance({
       user_id: userId,
@@ -106,16 +108,12 @@ ${weaknesses.map((w: string) => `- ${w}`).join("\n")}`;
     modelUsed = engineResult.modelUsed;
     tokensUsed = engineResult.tokensUsed;
     latencyMs = engineResult.latencyMs;
-  } catch (e) {
-    if (e instanceof EngineUnavailableError) {
-      const fallback = await callAI<EnhanceResult>("enhance", userMessage);
-      result = fallback.result;
-      modelUsed = fallback.modelUsed;
-      tokensUsed = fallback.tokensUsed;
-      latencyMs = fallback.latencyMs;
-    } else {
-      throw e;
-    }
+  } catch {
+    const fallback = await callAI<EnhanceResult>("enhance", userMessage);
+    result = fallback.result;
+    modelUsed = fallback.modelUsed;
+    tokensUsed = fallback.tokensUsed;
+    latencyMs = fallback.latencyMs;
   }
 
   const analysis = await prisma.analysis.create({

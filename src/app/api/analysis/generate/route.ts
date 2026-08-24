@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRole, rateLimit, type AuthenticatedRequest } from "@/lib/middleware";
 import { generateSchema, validateRequest } from "@/lib/validation";
 import { callAI, type GenerateResult } from "@/lib/ai";
-import { engineGenerate, EngineUnavailableError } from "@/lib/engine-client";
+import { engineGenerate } from "@/lib/engine-client";
 import { logAudit, getClientIp } from "@/lib/audit";
 import { errorResponse, aiErrorResponse } from "@/lib/errors";
 
@@ -23,6 +23,7 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
       let latencyMs: number;
 
       try {
+        if (validated.data.skipEngine) throw new Error("skipEngine");
         const engineResult = await engineGenerate({
           user_id: request.user.id,
           requirement: description,
@@ -31,16 +32,12 @@ export const POST = rateLimit("analysis", AI_RATE_LIMIT)(
         modelUsed = engineResult.modelUsed;
         tokensUsed = engineResult.tokensUsed;
         latencyMs = engineResult.latencyMs;
-      } catch (e) {
-        if (e instanceof EngineUnavailableError) {
-          const fallback = await callAI<GenerateResult>("generate", description);
-          result = fallback.result;
-          modelUsed = fallback.modelUsed;
-          tokensUsed = fallback.tokensUsed;
-          latencyMs = fallback.latencyMs;
-        } else {
-          throw e;
-        }
+      } catch {
+        const fallback = await callAI<GenerateResult>("generate", description);
+        result = fallback.result;
+        modelUsed = fallback.modelUsed;
+        tokensUsed = fallback.tokensUsed;
+        latencyMs = fallback.latencyMs;
       }
 
       const analysis = await prisma.analysis.create({

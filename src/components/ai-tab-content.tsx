@@ -11,7 +11,6 @@ import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/ui/code-block";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
-import { PipelineProgress } from "@/components/ui/pipeline-progress";
 import { AILoading } from "@/components/ui/ai-loading";
 import { Button } from "@/components/ui/button";
 import { BatchProgress } from "@/components/batch-progress";
@@ -167,11 +166,7 @@ export function AITabContent() {
           <BatchProgress batchId={activeTab.batchId} onStatusChange={handleBatchStatusChange} />
         )}
 
-        {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && (activeTab.type === "analyze" || activeTab.type === "enhance" || activeTab.type === "generate") && (
-          <PipelineProgress stageProgress={activeTab.stageProgress} startedAt={activeTab.pipelineStartedAt} />
-        )}
-
-        {!isBatchType(activeTab.type) && activeTab.status === "running" && !activeTab.useEngine && (
+        {!isBatchType(activeTab.type) && activeTab.status === "running" && (
           <AILoading
             operation={activeTab.type as "analyze" | "enhance" | "generate" | "simulate" | "post_enhance"}
             statusMessage={activeTab.statusMessage}
@@ -181,10 +176,6 @@ export function AITabContent() {
               }
             } : undefined}
           />
-        )}
-
-        {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && activeTab.type === "simulate" && (
-          <AILoading operation="simulate" statusMessage={activeTab.statusMessage} />
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "failed" && activeTab.validationRejection && (
@@ -626,7 +617,6 @@ function TabEnhanceResults({ result, ruleId, tabId, postEnhance }: { result: Enh
   const { updateTab } = useTabStore();
 
   const analyzingPost = postEnhance?.status === "running";
-  const postUseEngine = postEnhance?.useEngine ?? true;
   const postAnalysisResult = postEnhance?.result ?? null;
 
   const writePostEnhance: PipelineWriter = (patch) => {
@@ -704,7 +694,7 @@ function TabEnhanceResults({ result, ruleId, tabId, postEnhance }: { result: Enh
       const res = await fetch("/api/analysis/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId, query: result.enhancedQuery, postEnhancement: true }),
+        body: JSON.stringify({ ruleId, query: result.enhancedQuery, postEnhancement: true, skipEngine: true }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -739,11 +729,7 @@ function TabEnhanceResults({ result, ruleId, tabId, postEnhance }: { result: Enh
         </div>
       )}
 
-      {analyzingPost && ruleId && postUseEngine && (
-        <PipelineProgress stageProgress={postEnhance?.stageProgress} startedAt={postEnhance?.pipelineStartedAt} />
-      )}
-
-      {analyzingPost && ruleId && !postUseEngine && (
+      {analyzingPost && ruleId && (
         <AILoading operation="post_enhance" />
       )}
 
