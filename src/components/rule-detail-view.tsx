@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardBody } from "@/components/ui/card";
@@ -449,9 +448,9 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
 
   return (
     <div className="max-w-5xl">
-      <Link href="/dashboard/rules" className="text-sm text-text-secondary hover:text-primary mb-4 inline-block">
+      <button onClick={() => navigate("/dashboard/rules")} className="text-sm text-text-secondary hover:text-primary mb-4 inline-block">
         ← Back to Rules
-      </Link>
+      </button>
 
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4 mb-6">
         <div className="min-w-0">
@@ -574,14 +573,14 @@ export function RuleDetailView({ ruleId }: { ruleId: string }) {
             <span className="text-xl font-bold text-text">{rule.riskScore}</span>
           </CardBody>
         </Card>
-        <Link href={`/dashboard/rules/${rule.id}/history`}>
+        <button onClick={() => navigate(`/dashboard/rules/${rule.id}/history`)} className="text-left">
           <Card className="hover:border-primary/50 transition-colors">
             <CardBody>
               <p className="text-xs text-text-muted mb-1">Analyses</p>
               <span className="text-xl font-bold text-text">{rule._count.analyses}</span>
             </CardBody>
           </Card>
-        </Link>
+        </button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
