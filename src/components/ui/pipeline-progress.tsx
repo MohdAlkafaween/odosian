@@ -105,6 +105,8 @@ interface StageState {
   status: StageStatus;
 }
 
+const MIN_STAGE_VISIBLE_MS = 500;
+
 export function PipelineProgress({
   tabId,
   endpoint,
@@ -133,6 +135,46 @@ export function PipelineProgress({
   const onErrorRef = useRef(onError);
   onCompleteRef.current = onComplete;
   onErrorRef.current = onError;
+
+  const stageQueueRef = useRef<{ type: "stage"; stage: string }[]>([]);
+  const drainRunningRef = useRef(false);
+  const lastVisualUpdateRef = useRef(0);
+
+  const drainQueue = useRef(() => {
+    if (drainRunningRef.current) return;
+    drainRunningRef.current = true;
+
+    const processNext = () => {
+      const item = stageQueueRef.current.shift();
+      if (!item) {
+        drainRunningRef.current = false;
+        return;
+      }
+
+      const now = Date.now();
+      const sinceLast = now - lastVisualUpdateRef.current;
+      const delay = Math.max(0, MIN_STAGE_VISIBLE_MS - sinceLast);
+
+      setTimeout(() => {
+        lastVisualUpdateRef.current = Date.now();
+        setStages((prev) => {
+          const next = { ...prev };
+          Object.keys(next).forEach((k) => {
+            if (next[k].status === "active") {
+              next[k] = { status: "completed" };
+            }
+          });
+          if (next[item.stage]) {
+            next[item.stage] = { status: "active" };
+          }
+          return next;
+        });
+        processNext();
+      }, delay);
+    };
+
+    processNext();
+  }).current;
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -196,27 +238,24 @@ export function PipelineProgress({
               try {
                 const parsed = JSON.parse(eventData);
                 if (eventType === "stage") {
-                  setStages((prev) => {
-                    const next = { ...prev };
-                    Object.keys(next).forEach((k) => {
-                      if (next[k].status === "active") {
-                        next[k] = { status: "completed" };
-                      }
-                    });
-                    if (next[parsed.stage]) {
-                      next[parsed.stage] = { status: "active" };
-                    }
-                    return next;
-                  });
+                  stageQueueRef.current.push({ type: "stage", stage: parsed.stage });
+                  drainQueue();
                 } else if (eventType === "result") {
-                  setStages((prev) => {
-                    const next = { ...prev };
-                    Object.keys(next).forEach((k) => {
-                      next[k] = { status: "completed" };
+                  const waitForDrain = () => {
+                    if (stageQueueRef.current.length > 0 || drainRunningRef.current) {
+                      setTimeout(waitForDrain, 100);
+                      return;
+                    }
+                    setStages((prev) => {
+                      const next = { ...prev };
+                      Object.keys(next).forEach((k) => {
+                        next[k] = { status: "completed" };
+                      });
+                      return next;
                     });
-                    return next;
-                  });
-                  setTimeout(() => onCompleteRef.current(parsed), 300);
+                    setTimeout(() => onCompleteRef.current(parsed), 300);
+                  };
+                  waitForDrain();
                 } else if (eventType === "error") {
                   if (parsed.category === "validation" || parsed.category?.includes("validation")) {
                     onErrorRef.current(parsed.error || "Quality check failed", { category: parsed.category, issues: parsed.issues || [], structuredIssues: parsed.structured_issues || [] });
