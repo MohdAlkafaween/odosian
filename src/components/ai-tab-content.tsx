@@ -66,8 +66,9 @@ function RetryButton({ tab }: { tab: AITab }) {
       } else {
         updateTab(tab.id, { status: "failed", error: data.error || "Retry failed" });
       }
-    } catch {
-      updateTab(tab.id, { status: "failed", error: "Failed to connect to server" });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      updateTab(tab.id, { status: "failed", error: `Connection failed: ${msg}` });
     } finally {
       setRetrying(false);
     }
@@ -195,8 +196,9 @@ export function AITabContent() {
                   } else {
                     updateTab(activeTab.id, { status: "failed", error: data.error || "Failed" });
                   }
-                } catch {
-                  updateTab(activeTab.id, { status: "failed", error: "Failed to connect to server" });
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : "Unknown error";
+                  updateTab(activeTab.id, { status: "failed", error: `Fallback failed: ${msg}` });
                 }
               } else {
                 updateTab(activeTab.id, { status: "failed", error });
@@ -515,34 +517,18 @@ function TabAnalyzeResults({ result, ruleId }: { result: AnalyzeResult; ruleId?:
   const [enhancing, setEnhancing] = useState(false);
   const { addTab, updateTab, setActiveTab } = useTabStore();
 
-  const handleEnhance = async () => {
+  const handleEnhance = () => {
     if (!ruleId) return;
     setEnhancing(true);
-    const tabId = addTab({
+    addTab({
       type: "enhance",
       title: "Enhancement",
       ruleId,
       status: "running",
       statusMessage: "AI is enhancing the rule...",
+      useEngine: true,
     });
-    try {
-      const res = await fetch("/api/analysis/enhance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ruleId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        updateTab(tabId, { status: "completed", result: data.analysis });
-        setActiveTab(tabId);
-      } else {
-        updateTab(tabId, { status: "failed", error: data.error || "Enhancement failed" });
-      }
-    } catch {
-      updateTab(tabId, { status: "failed", error: "Failed to connect to server" });
-    } finally {
-      setEnhancing(false);
-    }
+    setEnhancing(false);
   };
 
   return (
