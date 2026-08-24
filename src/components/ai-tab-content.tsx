@@ -11,6 +11,7 @@ import { CodeBlock } from "@/components/ui/code-block";
 import { ScoreGauge } from "@/components/ui/score-gauge";
 import { Spinner } from "@/components/ui/loading";
 import { PipelineProgress } from "@/components/ui/pipeline-progress";
+import { AILoading } from "@/components/ui/ai-loading";
 import { Button } from "@/components/ui/button";
 import { BatchProgress } from "@/components/batch-progress";
 import { useToastStore } from "@/stores/toast";
@@ -208,30 +209,19 @@ export function AITabContent() {
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "running" && !activeTab.useEngine && (
-          <div className="flex flex-col items-center gap-3 py-16">
-            <Spinner size="lg" />
-            <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
-            {(activeTab.type === "simulate" || activeTab.type === "analyze" || activeTab.type === "enhance") && (
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={() => {
-                  if (cancelTab(activeTab.id)) {
-                    updateTab(activeTab.id, { status: "failed", error: "Cancelled" });
-                  }
-                }}
-              >
-                Cancel
-              </Button>
-            )}
-          </div>
+          <AILoading
+            operation={activeTab.type as "analyze" | "enhance" | "generate" | "simulate" | "post_enhance"}
+            statusMessage={activeTab.statusMessage}
+            onCancel={(activeTab.type === "simulate" || activeTab.type === "analyze" || activeTab.type === "enhance") ? () => {
+              if (cancelTab(activeTab.id)) {
+                updateTab(activeTab.id, { status: "failed", error: "Cancelled" });
+              }
+            } : undefined}
+          />
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "running" && activeTab.useEngine && activeTab.type === "simulate" && (
-          <div className="flex flex-col items-center gap-3 py-16">
-            <Spinner size="lg" />
-            <p className="text-text-secondary text-sm">{activeTab.statusMessage || "Processing..."}</p>
-          </div>
+          <AILoading operation="simulate" statusMessage={activeTab.statusMessage} />
         )}
 
         {!isBatchType(activeTab.type) && activeTab.status === "failed" && activeTab.validationRejection && (
